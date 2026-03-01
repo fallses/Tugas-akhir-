@@ -3,6 +3,8 @@
 #include <Adafruit_SSD1306.h>
 #include <WiFi.h>
 #include <Preferences.h>
+#include <Adafruit_MAX31865.h>
+#include <ESP32Servo.h>
 Preferences preferences;
 
 
@@ -14,6 +16,31 @@ Preferences preferences;
 #define SCL_PIN 22
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+
+// ================= SENSOR & AKTUATOR =================
+#define MAX_CS   5
+#define MAX_MOSI 23
+#define MAX_MISO 19
+#define MAX_CLK  18
+
+#define PRESSURE_PIN 34
+#define RELAY_IGNITER 26
+#define RELAY_VALVE   27
+#define SERVO_PIN 4
+
+Adafruit_MAX31865 max31865(MAX_CS, MAX_MOSI, MAX_MISO, MAX_CLK);
+Servo gasServo;
+
+#define RREF 430.0
+#define RNOMINAL 100.0
+
+float Kp = 3.0;
+float Ki = 0.5;
+float Kd = 1.0;
+
+float integral = 0;
+float previousError = 0;
+unsigned long lastPID = 0;
 
 // ================= BUTTON =================
 #define BTN_UP     32
@@ -85,9 +112,8 @@ long sisaDetik = 0;
 bool paused = false;
 bool komporON = false;
 
-// ================= SUHU (SIMULASI) =================
-int suhuAwal = 30;
-int suhuAktual = 30;
+// ================= SUHU REAL =================
+float suhuAwal = 0;
 
 // ================= WELCOME =================
 void welcomeAnimation() {
@@ -328,17 +354,34 @@ void drawIgnitionLoading(int frame) {
 }
 
 // ================= RUNNING =================
-void drawRunning() {
+void drawRunning(float suhu, float pressure) {
   display.clearDisplay();
 
   display.setCursor(0, 0);
   display.print("STERILISASI JALAN");
 
+  // ===== SUHU =====
+  display.setCursor(0, 12);
+  display.print("Suhu : ");
+  display.print(suhu, 1);
+  display.print("C/");
+  display.print(setSuhu);
+  display.print("C");
+
+  // ===== TEKANAN =====
+  display.setCursor(0, 22);
+  display.print("Tek  : ");
+  display.print(pressure, 1);
+  display.print("b/");
+  display.print(setTekanan);
+  display.print("b");
+
+  // ===== TIMER =====
   int jam = sisaDetik / 3600;
   int menit = (sisaDetik % 3600) / 60;
   int detik = sisaDetik % 60;
 
-  display.setCursor(0, 20);
+  display.setCursor(0, 36);
   display.print("Timer : ");
   display.print(jam); display.print(":");
   if (menit < 10) display.print("0");
@@ -346,7 +389,7 @@ void drawRunning() {
   if (detik < 10) display.print("0");
   display.print(detik);
 
-  display.setCursor(0, 50);
+  display.setCursor(0, 54);
   display.print(paused ? "UP=LANJUT DN=STOP" : "UP=JEDA  DN=STOP");
 
   display.display();
@@ -398,6 +441,22 @@ void setup() {
       connectedSSID = savedSSID;
     }
   }
+  // ===== INIT SENSOR & AKTUATOR =====
+  max31865.begin(MAX31865_3WIRE);
+
+  pinMode(RELAY_IGNITER, OUTPUT);
+  pinMode(RELAY_VALVE, OUTPUT);
+
+  digitalWrite(RELAY_IGNITER, HIGH);
+  digitalWrite(RELAY_VALVE, HIGH);
+
+  gasServo.attach(SERVO_PIN);
+  gasServo.write(0);
+
+  analogReadResolution(12);
+  analogSetAttenuation(ADC_11db);
+
+  lastPID = millis();
 }
 
 
@@ -675,33 +734,91 @@ void loop() {
       drawCountdown(i);
       delay(1000);
     }
-    suhuAwal = suhuAktual;
+
+    suhuAwal = max31865.temperature(RNOMINAL, RREF);
     currentMode = MODE_IGNITION;
   }
 
   // ===== IGNITION =====
   else if (currentMode == MODE_IGNITION) {
-    static int anim = 0;
-    suhuAktual++;
-    drawIgnitionLoading(anim);
-    anim = (anim + 1) % 4;
 
-    if (suhuAktual >= suhuAwal + 10) {
-      sisaDetik = durasiJam * 3600L + durasiMenit * 60L;
-      lastMillis = millis();
-      paused = false;
-      currentMode = MODE_RUNNING;
+    static unsigned long ignitionStart = 0;
+    float suhu = max31865.temperature(RNOMINAL, RREF);
+
+    if (ignitionStart == 0) {
+      ignitionStart = millis();
+      suhuAwal = suhu;
+      gasServo.write(40);              // buka gas kecil
+      digitalWrite(RELAY_IGNITER, LOW); // nyalakan pemantik
     }
-    delay(500);
-  }
 
+    drawIgnitionLoading((millis() / 500) % 4);
+
+    if (millis() - ignitionStart >= 15000) {
+
+      digitalWrite(RELAY_IGNITER, HIGH); // matikan pemantik
+
+      if (suhu >= suhuAwal + 10) {
+        sisaDetik = durasiJam * 3600L + durasiMenit * 60L;
+        lastMillis = millis();
+        currentMode = MODE_RUNNING;
+      } else {
+        gasServo.write(0);
+        currentMode = MODE_STERIL;
+      }
+
+      ignitionStart = 0;
+    }
+  }
   // ===== RUNNING =====
   else if (currentMode == MODE_RUNNING) {
+
+    float suhu = max31865.temperature(RNOMINAL, RREF);
+
+    // ===== PID SUHU =====
+    unsigned long now = millis();
+    float dt = (now - lastPID) / 1000.0;
+    lastPID = now;
+
+    float error = setSuhu - suhu;
+    integral += error * dt;
+
+    if (integral > 100) integral = 100;
+    if (integral < -100) integral = -100;
+
+    float derivative = (error - previousError) / dt;
+    float output = Kp * error + Ki * integral + Kd * derivative;
+    previousError = error;
+
+    if (output > 180) output = 180;
+    if (output < 0) output = 0;
+
+    gasServo.write(output);
+
+    // ===== SENSOR TEKANAN =====
+    int adcValue = analogRead(PRESSURE_PIN);
+    float voltage_div = (adcValue / 4095.0) * 3.3;
+    float voltage_real = voltage_div * ((15000.0 + 20000.0) / 20000.0);
+
+    float pressure = ((voltage_real - 0.5) *
+                      12.0 /
+                      (4.5 - 0.5));
+
+    if (pressure > setTekanan) {
+      digitalWrite(RELAY_VALVE, LOW);
+    } else {
+      digitalWrite(RELAY_VALVE, HIGH);
+    }
+
+    // ===== TIMER =====
     if (!paused && millis() - lastMillis >= 1000) {
       lastMillis = millis();
       sisaDetik--;
-      if (sisaDetik <= 0) currentMode = MODE_FINISH;
-      drawRunning();
+      if (sisaDetik <= 0) {
+        gasServo.write(0);
+        currentMode = MODE_FINISH;
+      }
+      drawRunning(suhu, pressure);
     }
 
     if (digitalRead(BTN_UP) == LOW) {
@@ -710,6 +827,7 @@ void loop() {
     }
 
     if (digitalRead(BTN_DOWN) == LOW) {
+      gasServo.write(0);
       currentMode = MODE_STERIL;
       drawSterilisasi();
       delay(300);

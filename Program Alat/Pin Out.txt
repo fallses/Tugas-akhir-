@@ -17,6 +17,18 @@ GND	GND
 SDA	GPIO 21
 SCL	GPIO 22
 
+Servo Gas
+
+Signal	GPIO 4
+VCC	5V (disarankan supply terpisah)
+GND	GND
+
+Relay
+
+Relay Igniter	GPIO 26
+
+Relay Valve	GPIO 27
+
 BTN UP
 GND	GPIO 32
 BTN DOWN
