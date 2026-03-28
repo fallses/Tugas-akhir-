@@ -798,7 +798,7 @@ void loop() {
     // ===== SENSOR TEKANAN =====
     int adcValue = analogRead(PRESSURE_PIN);
     float voltage_div = (adcValue / 4095.0) * 3.3;
-    float voltage_real = voltage_div * ((15000.0 + 20000.0) / 20000.0);
+    float voltage_real = voltage_div * ((10000.0 + 20000.0) / 20000.0);
 
     float pressure = ((voltage_real - 0.5) *
                       12.0 /
