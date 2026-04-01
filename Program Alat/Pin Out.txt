@@ -1,0 +1,37 @@
+Sensor tekanan 
+GPIO34
+VCC	5V
+GND	GND
+
+Sensor ThermoCople GPIO
+VIN	3.3V
+GND	GND
+SCK	GPIO 18
+SDI	GPIO 23
+SDO	GPIO 19
+CS	GPIO 5
+
+OLED
+VCC	3.3V
+GND	GND
+SDA	GPIO 21
+SCL	GPIO 22
+
+Servo Gas
+
+Signal	GPIO 4
+VCC	5V (disarankan supply terpisah)
+GND	GND
+
+Relay
+
+Relay Igniter	GPIO 26
+
+Relay Valve	GPIO 27
+
+BTN UP
+GND	GPIO 32
+BTN DOWN
+GND	GPIO 33
+BTN SELECT
+GND	GPIO 25
