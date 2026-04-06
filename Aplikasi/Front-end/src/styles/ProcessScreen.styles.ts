@@ -122,6 +122,205 @@ export const stepStyles = StyleSheet.create({
 });
 
 export const setStyles = StyleSheet.create({
+  // ── Scroll wrapper
+  scrollContent: {
+    paddingBottom: 32,
+    paddingTop: 4,
+  },
+
+  // ── Monitor card (realtime)
+  monitorCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  monitorTitle: {
+    color: COLORS.muted,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: 14,
+  },
+  monitorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  monitorItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  monitorValue: {
+    color: COLORS.white,
+    fontSize: 24,
+    fontWeight: '800',
+    marginTop: 4,
+    letterSpacing: 0.5,
+  },
+  monitorLabel: {
+    color: COLORS.muted,
+    fontSize: 11,
+    letterSpacing: 0.5,
+  },
+  monitorTrack: {
+    width: '80%',
+    height: 4,
+    backgroundColor: COLORS.dim,
+    borderRadius: 2,
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+  monitorFill: {
+    height: 4,
+    borderRadius: 2,
+  },
+  monitorPct: {
+    color: COLORS.muted,
+    fontSize: 10,
+    marginTop: 3,
+    letterSpacing: 0.3,
+  },
+  monitorDivider: {
+    width: 1,
+    height: 64,
+    backgroundColor: COLORS.border,
+    marginHorizontal: 8,
+  },
+
+  // ── Section label
+  sectionLabel: {
+    color: COLORS.muted,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: 10,
+    marginTop: 4,
+  },
+
+  // ── Preset buttons
+  presetRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 20,
+  },
+  presetBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    gap: 3,
+  },
+  presetBtnActive: {
+    borderColor: COLORS.accent,
+    backgroundColor: COLORS.accentDim,
+  },
+  presetLabel: {
+    color: COLORS.muted,
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  presetLabelActive: {
+    color: COLORS.accent,
+  },
+  presetDetail: {
+    color: COLORS.dim,
+    fontSize: 10,
+    letterSpacing: 0.3,
+  },
+  presetDetailActive: {
+    color: COLORS.accent,
+    opacity: 0.6,
+  },
+
+  // ── Parameter card
+  paramCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    paddingVertical: 4,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  paramRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  paramLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  paramName: {
+    color: COLORS.white,
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  paramInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  paramStepBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: COLORS.dim,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paramInput: {
+    color: COLORS.white,
+    fontSize: 15,
+    fontWeight: '800',
+    minWidth: 36,
+    textAlign: 'center',
+    padding: 0,
+  },
+  paramUnit: {
+    color: COLORS.muted,
+    fontSize: 11,
+    letterSpacing: 0.3,
+  },
+  paramDivider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginHorizontal: 16,
+  },
+
+  // ── Start button
+  startBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.accent,
+    borderRadius: 14,
+    paddingVertical: 16,
+    gap: 10,
+  },
+  startBtnText: {
+    color: COLORS.bg,
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+
+  // ── Style lama (dipertahankan untuk kompatibilitas jika masih dipakai)
   wrapper: {
     flex: 1,
     alignItems: 'center',
@@ -179,21 +378,6 @@ export const setStyles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 13,
     fontWeight: '700',
-  },
-  startBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.accent,
-    borderRadius: 14,
-    paddingHorizontal: 36,
-    paddingVertical: 16,
-    gap: 10,
-  },
-  startBtnText: {
-    color: COLORS.bg,
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: 0.5,
   },
 });
 
