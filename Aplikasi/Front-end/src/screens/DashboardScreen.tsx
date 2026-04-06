@@ -16,7 +16,6 @@ interface Alat {
   id: string;
   nama: string;
   idAlat: string;
-  status: boolean;
 }
 
 interface Props {
@@ -50,57 +49,45 @@ export default function DashboardScreen({ navigation }: Props) {
       Alert.alert('Gagal', 'ID alat tidak boleh kosong.');
       return;
     }
+
     const alatBaru: Alat = {
       id: Date.now().toString(),
       nama: inputNama.trim(),
       idAlat: inputId.trim(),
-      status: false,
     };
+
     setDaftarAlat(prev => [...prev, alatBaru]);
     tutupModal();
-  }
 
-  function toggleStatus(item: Alat) {
-    if (!item.status) {
-      setDaftarAlat(prev =>
-        prev.map(a => (a.id === item.id ? { ...a, status: true } : a))
-      );
-      navigation.navigate('ProcessScreen', {
-        namaAlat: item.nama,
-        idAlat: item.idAlat,
-      });
-    } else {
-      setDaftarAlat(prev =>
-        prev.map(a => (a.id === item.id ? { ...a, status: false } : a))
-      );
-    }
+    // Langsung navigasi ke ProcessScreen setelah tambah
+    // navigation.navigate('ProcessScreen', {
+    //   namaAlat: alatBaru.nama,
+    //   idAlat: alatBaru.idAlat,
+    // });
   }
 
   function renderItem({ item }: { item: Alat }) {
     return (
-      <View style={styles.alatCard}>
+      <TouchableOpacity
+        style={styles.alatCard}
+        onPress={() =>
+          navigation.navigate('ProcessScreen', {
+            namaAlat: item.nama,
+            idAlat: item.idAlat,
+          })
+        }
+      >
         <View style={styles.alatLeft}>
-          <View style={[styles.alatIcon, item.status ? styles.alatIconOn : styles.alatIconOff]}>
-            <MaterialCommunityIcons
-              name="chip"
-              size={22}
-              color={item.status ? '#2E7D32' : '#888888'}
-            />
+          <View style={[styles.alatIcon, styles.alatIconOff]}>
+            <MaterialCommunityIcons name="chip" size={22} color="#888888" />
           </View>
           <View>
             <Text style={styles.alatNama}>{item.nama}</Text>
             <Text style={styles.alatId}>ID: {item.idAlat}</Text>
           </View>
         </View>
-        <TouchableOpacity
-          style={[styles.statusBtn, item.status ? styles.statusOn : styles.statusOff]}
-          onPress={() => toggleStatus(item)}
-        >
-          <Text style={[styles.statusText, item.status ? styles.statusTextOn : styles.statusTextOff]}>
-            {item.status ? 'ON' : 'OFF'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+        <MaterialCommunityIcons name="chevron-right" size={20} color="#AAAAAA" />
+      </TouchableOpacity>
     );
   }
 
