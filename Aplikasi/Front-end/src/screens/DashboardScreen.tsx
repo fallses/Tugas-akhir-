@@ -79,14 +79,14 @@ export default function DashboardScreen({ navigation }: Props) {
       >
         <View style={styles.alatLeft}>
           <View style={[styles.alatIcon, styles.alatIconOff]}>
-            <MaterialCommunityIcons name="chip" size={22} color="#888888" />
+            <MaterialCommunityIcons name="chip" size={22} color="#00E5FF" />
           </View>
           <View>
             <Text style={styles.alatNama}>{item.nama}</Text>
             <Text style={styles.alatId}>ID: {item.idAlat}</Text>
           </View>
         </View>
-        <MaterialCommunityIcons name="chevron-right" size={20} color="#AAAAAA" />
+        <MaterialCommunityIcons name="chevron-right" size={20} color="#555580" />
       </TouchableOpacity>
     );
   }
@@ -109,7 +109,7 @@ export default function DashboardScreen({ navigation }: Props) {
 
         {daftarAlat.length === 0 ? (
           <View style={styles.emptyWrapper}>
-            <MaterialCommunityIcons name="hardware-chip-outline" size={48} color="#CCCCCC" />
+            <MaterialCommunityIcons name="hardware-chip-outline" size={48} color="#2A2A4A" />
             <Text style={styles.emptyText}>Belum ada alat terdaftar.</Text>
             <Text style={styles.emptySubtext}>Tekan + untuk menambahkan alat.</Text>
           </View>
@@ -138,7 +138,7 @@ export default function DashboardScreen({ navigation }: Props) {
             <TextInput
               style={styles.modalInput}
               placeholder="Contoh: Autoclave A1"
-              placeholderTextColor="#AAAAAA"
+              placeholderTextColor="#333366"
               value={inputNama}
               onChangeText={setInputNama}
             />
@@ -147,7 +147,7 @@ export default function DashboardScreen({ navigation }: Props) {
             <TextInput
               style={styles.modalInput}
               placeholder="Contoh: 12345"
-              placeholderTextColor="#AAAAAA"
+              placeholderTextColor="#333366"
               value={inputId}
               onChangeText={setInputId}
               keyboardType="default"
