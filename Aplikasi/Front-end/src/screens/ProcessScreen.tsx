@@ -610,11 +610,11 @@ export default function ProcessScreen({ route, navigation }: Props) {
             <Text style={runningStyles.statValue}>{inputTekanan} bar</Text>
             <Text style={runningStyles.statLabel}>Tekanan</Text>
           </View>
-          <View style={runningStyles.statCard}>
-            <MaterialCommunityIcons name="water-percent" size={20} color={COLORS.green} />
-            <Text style={runningStyles.statValue}>98%</Text>
-            <Text style={runningStyles.statLabel}>Uap</Text>
-          </View>
+          {/* <View style={runningStyles.statCard}> */}
+            {/* <MaterialCommunityIcons name="water-percent" size={20} color={COLORS.green} /> */}
+            {/* <Text style={runningStyles.statValue}>98%</Text> */}
+            {/* <Text style={runningStyles.statLabel}>Uap</Text> */}
+          {/* </View> */}
         </View>
         <View style={runningStyles.progressTrack}>
           <View style={[runningStyles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
