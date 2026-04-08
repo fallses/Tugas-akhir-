@@ -7,7 +7,6 @@ import {
   Modal,
   TextInput,
   SafeAreaView,
-  Alert,
 } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import styles from '../styles/DashboardScreen.styles';
@@ -22,33 +21,79 @@ interface Props {
   navigation: any;
 }
 
+function formatNamaAlat(text: string): string {
+  return text.replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function formatIdAlat(text: string): string {
+  return text.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+}
+
+function isValidIdAlat(id: string): boolean {
+  return /^[A-Z][A-Z0-9]*(-[0-9]+)+$/.test(id);
+}
+
 export default function DashboardScreen({ navigation }: Props) {
   const [daftarAlat, setDaftarAlat] = useState<Alat[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [inputNama, setInputNama] = useState('');
   const [inputId, setInputId] = useState('');
+  const [namaError, setNamaError] = useState('');
+  const [idError, setIdError] = useState('');
 
   function bukaModal() {
     setInputNama('');
     setInputId('');
+    setNamaError('');
+    setIdError('');
     setModalVisible(true);
   }
 
   function tutupModal() {
     setInputNama('');
     setInputId('');
+    setNamaError('');
+    setIdError('');
     setModalVisible(false);
   }
 
+  function handleNamaChange(text: string) {
+    const formatted = formatNamaAlat(text);
+    setInputNama(formatted);
+    if (namaError && formatted.trim()) {
+      setNamaError('');
+    }
+  }
+
+  function handleIdChange(text: string) {
+    const formatted = formatIdAlat(text);
+    setInputId(formatted);
+    if (idError && isValidIdAlat(formatted)) {
+      setIdError('');
+    }
+  }
+
   function tambahAlat() {
+    let valid = true;
+
     if (!inputNama.trim()) {
-      Alert.alert('Gagal', 'Nama alat tidak boleh kosong.');
-      return;
+      setNamaError('Nama alat tidak boleh kosong.');
+      valid = false;
+    } else {
+      setNamaError('');
     }
+
     if (!inputId.trim()) {
-      Alert.alert('Gagal', 'ID alat tidak boleh kosong.');
-      return;
+      setIdError('ID alat tidak boleh kosong.');
+      valid = false;
+    } else if (!isValidIdAlat(inputId.trim())) {
+      setIdError('Format salah. Contoh yang benar: AUTOCLAVE-1, MESIN-42');
+      valid = false;
+    } else {
+      setIdError('');
     }
+
+    if (!valid) return;
 
     const alatBaru: Alat = {
       id: Date.now().toString(),
@@ -58,12 +103,6 @@ export default function DashboardScreen({ navigation }: Props) {
 
     setDaftarAlat(prev => [...prev, alatBaru]);
     tutupModal();
-
-    // Langsung navigasi ke ProcessScreen setelah tambah
-    // navigation.navigate('ProcessScreen', {
-    //   namaAlat: alatBaru.nama,
-    //   idAlat: alatBaru.idAlat,
-    // });
   }
 
   function renderItem({ item }: { item: Alat }) {
@@ -136,22 +175,40 @@ export default function DashboardScreen({ navigation }: Props) {
 
             <Text style={styles.modalLabel}>Nama Alat</Text>
             <TextInput
-              style={styles.modalInput}
+              style={[
+                styles.modalInput,
+                namaError ? { borderColor: '#FF4444', borderWidth: 1 } : {},
+              ]}
               placeholder="Contoh: Autoclave A1"
               placeholderTextColor="#333366"
               value={inputNama}
-              onChangeText={setInputNama}
+              onChangeText={handleNamaChange}
+              autoCapitalize="words"
             />
+            {namaError ? (
+              <Text style={{ color: '#FF4444', fontSize: 11, marginTop: -6, marginBottom: 8 }}>
+                {namaError}
+              </Text>
+            ) : null}
 
             <Text style={styles.modalLabel}>ID Alat</Text>
             <TextInput
-              style={styles.modalInput}
-              placeholder="Contoh: 12345"
+              style={[
+                styles.modalInput,
+                idError ? { borderColor: '#FF4444', borderWidth: 1 } : {},
+              ]}
+              placeholder="Contoh: AUTOCLAVE-1"
               placeholderTextColor="#333366"
               value={inputId}
-              onChangeText={setInputId}
+              onChangeText={handleIdChange}
+              autoCapitalize="characters"
               keyboardType="default"
             />
+            {idError ? (
+              <Text style={{ color: '#FF4444', fontSize: 11, marginTop: -6, marginBottom: 8 }}>
+                {idError}
+              </Text>
+            ) : null}
 
             <View style={styles.modalBtnRow}>
               <TouchableOpacity style={styles.modalBtnBatal} onPress={tutupModal}>

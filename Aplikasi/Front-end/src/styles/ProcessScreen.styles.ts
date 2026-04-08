@@ -16,6 +16,7 @@ export const COLORS = {
   white:      '#F0F4FF',
   muted:      '#4A5E78',
   danger:     '#FF4455',
+  text:       '#F0F4FF',
 };
 
 const shared = StyleSheet.create({
@@ -68,6 +69,7 @@ export const topBarStyles = StyleSheet.create({
     marginTop: 2,
     letterSpacing: 0.5,
   },
+  // badge masih ada untuk kompatibilitas, tapi tidak ditampilkan di running
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -89,7 +91,6 @@ export const topBarStyles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1.5,
   },
-  // ── Tombol Riwayat (hanya muncul di fase 'set')
   historyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -292,6 +293,7 @@ export const setStyles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
+  // Dipertahankan untuk kompatibilitas (tidak dipakai di durasi)
   paramStepBtn: {
     width: 28,
     height: 28,
@@ -302,6 +304,7 @@ export const setStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // ── Input lama (kompatibilitas)
   paramInput: {
     color: COLORS.white,
     fontSize: 15,
@@ -310,10 +313,21 @@ export const setStyles = StyleSheet.create({
     textAlign: 'center',
     padding: 0,
   },
+  // ── Input ketik langsung — bersih, rata kanan, besar
+  paramInputClean: {
+    color: COLORS.white,
+    fontSize: 24,
+    fontWeight: '800',
+    textAlign: 'right',
+    minWidth: 52,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+  },
   paramUnit: {
     color: COLORS.muted,
-    fontSize: 11,
+    fontSize: 13,
     letterSpacing: 0.3,
+    minWidth: 36,
   },
   paramDivider: {
     height: 1,
@@ -489,6 +503,8 @@ export const ignitionStyles = StyleSheet.create({
     fontSize: 13,
     letterSpacing: 0.5,
     marginBottom: 32,
+    textAlign: 'center',
+    paddingHorizontal: 32,
   },
   barTrack: {
     width: 220,
@@ -507,6 +523,7 @@ export const ignitionStyles = StyleSheet.create({
     color: COLORS.muted,
     fontSize: 11,
     letterSpacing: 1,
+    textAlign: 'center',
   },
 });
 
@@ -576,21 +593,31 @@ export const runningStyles = StyleSheet.create({
   },
   progressTrack: {
     width: '100%',
-    height: 5,
+    height: 6,
     backgroundColor: COLORS.dim,
     borderRadius: 3,
     overflow: 'hidden',
     marginTop: 20,
+    marginBottom: 0,
   },
   progressFill: {
-    height: 5,
+    height: 6,
     backgroundColor: COLORS.green,
     borderRadius: 3,
   },
+  // ── Persentase besar di bawah progress bar
+  progressPct: {
+    fontSize: 42,
+    fontWeight: '900',
+    color: COLORS.green,
+    letterSpacing: -1,
+    marginTop: 8,
+    lineHeight: 46,
+  },
   progressLabel: {
     color: COLORS.muted,
-    fontSize: 11,
-    marginTop: 6,
+    fontSize: 14,
+    marginTop: 2,
     letterSpacing: 0.5,
   },
 });
@@ -657,7 +684,6 @@ export const finishStyles = StyleSheet.create({
     height: 1,
     backgroundColor: COLORS.border,
   },
-  // ── Tombol utama (Proses Baru)
   doneBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -674,7 +700,6 @@ export const finishStyles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0.5,
   },
-  // ── Tombol sekunder (Kembali ke Dashboard)
   secondaryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
