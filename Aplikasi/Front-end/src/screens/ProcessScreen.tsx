@@ -25,6 +25,22 @@ import sharedStyles, {
 
 type Phase = 'set' | 'countdown' | 'ignition' | 'running' | 'finish';
 
+<<<<<<< Updated upstream
+=======
+interface HistoryEntry {
+  id: string;
+  namaAlat: string;
+  idAlat: string;
+  suhu: string;
+  tekanan: string;
+  durasi: string;
+  selesaiPukul: string;
+  tanggal: string;
+  status: 'Berhasil' | 'Dihentikan';
+  notes?: string;
+}
+
+>>>>>>> Stashed changes
 interface Props {
   route: {
     params: {
@@ -60,12 +76,31 @@ export default function ProcessScreen({ route, navigation }: Props) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [finishedAt, setFinishedAt]         = useState('');
 
+<<<<<<< Updated upstream
   // Setting state
   const [selectedPreset, setSelectedPreset] = useState(1); // default Standar
 
   // ── Durasi: jam + menit
   const [inputJam, setInputJam]     = useState('0');
   const [inputMenit, setInputMenit] = useState('20');
+=======
+  // History detail + notes
+  const [selectedEntry, setSelectedEntry]   = useState<HistoryEntry | null>(null);
+  const [showDetail, setShowDetail]         = useState(false);
+  const [editingNotes, setEditingNotes]     = useState(false);
+  const [notesText, setNotesText]           = useState('');
+
+  // Ignition session state
+  const [ignitionSession, setIgnitionSession] = useState(1);
+  const [ignitionError, setIgnitionError]     = useState('');
+
+  const [selectedPreset, setSelectedPreset] = useState(1);
+  const [inputJam, setInputJam]             = useState('0');
+  const [inputMenit, setInputMenit]         = useState('20');
+  const [inputSuhu, setInputSuhu]           = useState('121');
+  const [inputTekanan, setInputTekanan]     = useState('1.2');
+  const [sterilDetik, setSterilDetik]       = useState(20 * 60);
+>>>>>>> Stashed changes
 
   const [inputSuhu, setInputSuhu]         = useState('121');
   const [inputTekanan, setInputTekanan]   = useState('1.2');
@@ -117,9 +152,16 @@ export default function ProcessScreen({ route, navigation }: Props) {
     return total > 0 ? total : 60; // minimal 1 menit
   }
 
+<<<<<<< Updated upstream
   // ── Clamp helpers
   function clampJam(val: number)   { return Math.max(0, Math.min(23, val)); }
   function clampMenit(val: number) { return Math.max(0, Math.min(59, val)); }
+=======
+  function clampJam(val: number)     { return Math.max(0,   Math.min(23,  val)); }
+  function clampMenit(val: number)   { return Math.max(0,   Math.min(59,  val)); }
+  function clampSuhu(val: number)    { return Math.max(100, Math.min(150, val)); }
+  function clampTekanan(val: number) { return Math.max(0.5, Math.min(3.0, val)); }
+>>>>>>> Stashed changes
 
   function applyPreset(index: number) {
     setSelectedPreset(index);
@@ -541,7 +583,96 @@ export default function ProcessScreen({ route, navigation }: Props) {
 
         </View>
 
+<<<<<<< Updated upstream
         {/* Tombol Mulai */}
+=======
+        {/* Suhu & Tekanan Target */}
+        <Text style={setStyles.sectionLabel}>Parameter Target</Text>
+        <View style={setStyles.paramCard}>
+
+          {/* Suhu Target: 100–150°C — hard clamp saat ketik */}
+          <View style={setStyles.paramRow}>
+            <View style={setStyles.paramLeft}>
+              <MaterialCommunityIcons name="thermometer-high" size={18} color={COLORS.fire} />
+              <View>
+                <Text style={setStyles.paramName}>Suhu Target</Text>
+                <Text style={setStyles.paramInput}>100 – 150 °C</Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <TextInput
+                style={[setStyles.paramInputClean, { color: COLORS.fire }]}
+                value={inputSuhu}
+                onChangeText={v => {
+                  const raw = v.replace(/[^0-9]/g, '');
+                  if (raw === '') { setInputSuhu(''); return; }
+                  const num = parseInt(raw, 10);
+                  // Tolak langsung jika sudah melewati batas atas
+                  if (num > 150) return;
+                  setInputSuhu(raw);
+                }}
+                onBlur={() => {
+                  const num = parseInt(inputSuhu, 10);
+                  if (isNaN(num) || inputSuhu === '') { setInputSuhu('121'); return; }
+                  if (num < 100) setInputSuhu('100');
+                  else if (num > 150) setInputSuhu('150');
+                }}
+                keyboardType="numeric"
+                maxLength={3}
+                placeholder="121"
+                placeholderTextColor={COLORS.muted}
+              />
+              <Text style={setStyles.paramUnit}>°C</Text>
+            </View>
+          </View>
+
+          <View style={setStyles.paramDivider} />
+
+          {/* Tekanan Target: 0.5–3.0 bar — hard clamp saat ketik */}
+          <View style={setStyles.paramRow}>
+            <View style={setStyles.paramLeft}>
+              <MaterialCommunityIcons name="gauge" size={18} color={COLORS.accent} />
+              <View>
+                <Text style={setStyles.paramName}>Tekanan Target</Text>
+                <Text style={setStyles.paramInput}>0.5 – 3.0 bar</Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <TextInput
+                style={setStyles.paramInputClean}
+                value={inputTekanan}
+                onChangeText={v => {
+                  // Hanya izinkan angka dan satu titik desimal
+                  const clean = v.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+                  // Izinkan string kosong atau sedang mengetik desimal ("1.", "0.")
+                  if (clean === '' || clean === '.') { setInputTekanan(clean); return; }
+                  const num = parseFloat(clean);
+                  if (isNaN(num)) return;
+                  // Tolak langsung jika melewati batas atas
+                  if (num > 3.0) return;
+                  setInputTekanan(clean);
+                }}
+                onBlur={() => {
+                  const num = parseFloat(inputTekanan);
+                  if (isNaN(num) || inputTekanan === '' || inputTekanan === '.') {
+                    setInputTekanan('1.2'); return;
+                  }
+                  if (num < 0.5) setInputTekanan('0.5');
+                  else if (num > 3.0) setInputTekanan('3.0');
+                  else setInputTekanan(num.toFixed(1));
+                }}
+                keyboardType="decimal-pad"
+                maxLength={4}
+                placeholder="1.2"
+                placeholderTextColor={COLORS.muted}
+              />
+              <Text style={setStyles.paramUnit}>bar</Text>
+            </View>
+          </View>
+
+        </View>
+
+>>>>>>> Stashed changes
         <TouchableOpacity style={setStyles.startBtn} onPress={handleMulaiProses}>
           <MaterialCommunityIcons name="play" size={18} color={COLORS.bg} />
           <Text style={setStyles.startBtnText}>Mulai Proses</Text>
@@ -673,6 +804,307 @@ export default function ProcessScreen({ route, navigation }: Props) {
     );
   }
 
+<<<<<<< Updated upstream
+=======
+  // ── HISTORY MODAL
+  function openDetail(entry: HistoryEntry) {
+    setSelectedEntry(entry);
+    setNotesText(entry.notes ?? '');
+    setEditingNotes(false);
+    setShowDetail(true);
+  }
+
+  function saveNotes() {
+    if (!selectedEntry) return;
+    const updated = history.map(e =>
+      e.id === selectedEntry.id ? { ...e, notes: notesText } : e
+    );
+    globalHistory = updated;
+    setHistory(updated);
+    setSelectedEntry(prev => prev ? { ...prev, notes: notesText } : prev);
+    setEditingNotes(false);
+  }
+
+  function renderHistoryModal() {
+    return (
+      <>
+        {/* ── LIST MODAL */}
+        <Modal
+          visible={showHistory}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowHistory(false)}
+        >
+          <View style={historyStyles.overlay}>
+            <View style={historyStyles.sheet}>
+              <View style={historyStyles.header}>
+                <Text style={historyStyles.headerTitle}>Riwayat Proses</Text>
+                <TouchableOpacity onPress={() => setShowHistory(false)}>
+                  <MaterialCommunityIcons name="close" size={22} color={COLORS.muted} />
+                </TouchableOpacity>
+              </View>
+
+              {history.length === 0 ? (
+                <View style={historyStyles.empty}>
+                  <MaterialCommunityIcons name="history" size={48} color={COLORS.dim} />
+                  <Text style={historyStyles.emptyText}>Belum ada riwayat proses</Text>
+                </View>
+              ) : (
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  {history.map((entry) => {
+                    const hasNotes = (entry.notes ?? '').trim().length > 0;
+                    const color = entry.status === 'Berhasil' ? COLORS.green : COLORS.danger;
+                    return (
+                      <TouchableOpacity
+                        key={entry.id}
+                        style={historyStyles.card}
+                        onPress={() => openDetail(entry)}
+                        activeOpacity={0.75}
+                      >
+                        <View style={historyStyles.cardHeader}>
+                          <View style={historyStyles.cardLeft}>
+                            <Text style={historyStyles.cardAlat}>{entry.namaAlat}</Text>
+                            <Text style={historyStyles.cardId}>{entry.idAlat}</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            {hasNotes && (
+                              <MaterialCommunityIcons name="note-text-outline" size={14} color={COLORS.gold} />
+                            )}
+                            <View style={[historyStyles.statusBadge, { borderColor: color }]}>
+                              <Text style={[historyStyles.statusText, { color }]}>{entry.status}</Text>
+                            </View>
+                          </View>
+                        </View>
+                        <View style={historyStyles.cardDetails}>
+                          <View style={historyStyles.detailItem}>
+                            <MaterialCommunityIcons name="thermometer-high" size={14} color={COLORS.fire} />
+                            <Text style={historyStyles.detailText}>{entry.suhu}°C</Text>
+                          </View>
+                          <View style={historyStyles.detailItem}>
+                            <MaterialCommunityIcons name="gauge" size={14} color={COLORS.accent} />
+                            <Text style={historyStyles.detailText}>{entry.tekanan} bar</Text>
+                          </View>
+                          <View style={historyStyles.detailItem}>
+                            <MaterialCommunityIcons name="timer-outline" size={14} color={COLORS.muted} />
+                            <Text style={historyStyles.detailText}>{entry.durasi}</Text>
+                          </View>
+                        </View>
+                        {hasNotes && (
+                          <Text style={{ color: COLORS.gold, fontSize: 11, fontStyle: 'italic', marginTop: 4 }} numberOfLines={1}>
+                            📝 {entry.notes}
+                          </Text>
+                        )}
+                        <Text style={historyStyles.cardDate}>{entry.tanggal} · {entry.selesaiPukul}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              )}
+            </View>
+          </View>
+        </Modal>
+
+        {/* ── DETAIL + NOTES MODAL */}
+        {selectedEntry && (
+          <Modal
+            visible={showDetail}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setShowDetail(false)}
+          >
+            <View style={{
+              flex: 1,
+              backgroundColor: 'rgba(0,0,0,0.65)',
+              justifyContent: 'flex-end',
+            }}>
+              <View style={{
+                backgroundColor: COLORS.bg,
+                borderTopLeftRadius: 24,
+                borderTopRightRadius: 24,
+                maxHeight: '92%',
+                borderTopWidth: 1,
+                borderColor: COLORS.border,
+              }}>
+                {/* Drag handle */}
+                <View style={{
+                  width: 36, height: 4, borderRadius: 2,
+                  backgroundColor: COLORS.muted,
+                  alignSelf: 'center', marginTop: 12, marginBottom: 4, opacity: 0.4,
+                }} />
+
+                <ScrollView
+                  contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 40 }}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {/* Header status */}
+                  <View style={{ alignItems: 'center', marginBottom: 20, gap: 6 }}>
+                    <View style={{
+                      width: 64, height: 64, borderRadius: 32,
+                      borderWidth: 2,
+                      borderColor: selectedEntry.status === 'Berhasil' ? COLORS.green : COLORS.danger,
+                      backgroundColor: selectedEntry.status === 'Berhasil' ? COLORS.greenDim : '#2A1010',
+                      alignItems: 'center', justifyContent: 'center', marginBottom: 4,
+                    }}>
+                      <MaterialCommunityIcons
+                        name={selectedEntry.status === 'Berhasil' ? 'check-bold' : 'stop'}
+                        size={28}
+                        color={selectedEntry.status === 'Berhasil' ? COLORS.green : COLORS.danger}
+                      />
+                    </View>
+                    <Text style={{
+                      color: selectedEntry.status === 'Berhasil' ? COLORS.green : COLORS.danger,
+                      fontSize: 18, fontWeight: '900', letterSpacing: 1,
+                    }}>
+                      {selectedEntry.status === 'Berhasil' ? 'Steril Selesai' : 'Proses Dihentikan'}
+                    </Text>
+                    <Text style={{ color: COLORS.muted, fontSize: 12 }}>
+                      {selectedEntry.namaAlat} · {selectedEntry.idAlat}
+                    </Text>
+                  </View>
+
+                  {/* Detail info */}
+                  <View style={{
+                    backgroundColor: COLORS.surface, borderRadius: 16,
+                    padding: 16, marginBottom: 14,
+                    borderWidth: 1, borderColor: COLORS.border,
+                  }}>
+                    <Text style={{ color: COLORS.muted, fontSize: 10, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 12 }}>
+                      Detail Proses
+                    </Text>
+                    {[
+                      { icon: 'thermometer-high', label: 'Suhu',         value: `${selectedEntry.suhu}°C`,       color: COLORS.fire },
+                      { icon: 'gauge',            label: 'Tekanan',      value: `${selectedEntry.tekanan} bar`,  color: COLORS.accent },
+                      { icon: 'timer-outline',    label: 'Durasi',       value: selectedEntry.durasi },
+                      { icon: 'calendar-outline', label: 'Tanggal',      value: selectedEntry.tanggal },
+                      { icon: 'clock-outline',    label: 'Selesai Pukul',value: selectedEntry.selesaiPukul },
+                    ].map((row, i, arr) => (
+                      <React.Fragment key={row.label}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <MaterialCommunityIcons name={row.icon as any} size={14} color={row.color ?? COLORS.muted} />
+                            <Text style={{ color: COLORS.muted, fontSize: 13 }}>{row.label}</Text>
+                          </View>
+                          <Text style={{ color: COLORS.white, fontSize: 13, fontWeight: '700' }}>{row.value}</Text>
+                        </View>
+                        {i < arr.length - 1 && <View style={{ height: 1, backgroundColor: COLORS.border }} />}
+                      </React.Fragment>
+                    ))}
+                  </View>
+
+                  {/* Notes card */}
+                  <View style={{
+                    backgroundColor: COLORS.surface, borderRadius: 16,
+                    padding: 16, marginBottom: 16,
+                    borderWidth: 1, borderColor: COLORS.border,
+                  }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <MaterialCommunityIcons name="note-text-outline" size={15} color={COLORS.gold} />
+                        <Text style={{ color: COLORS.white, fontSize: 13, fontWeight: '700' }}>Catatan Riset</Text>
+                      </View>
+                      {!editingNotes && (
+                        <TouchableOpacity
+                          style={{
+                            flexDirection: 'row', alignItems: 'center', gap: 4,
+                            paddingHorizontal: 10, paddingVertical: 5,
+                            borderRadius: 8, backgroundColor: '#141E2E',
+                            borderWidth: 1, borderColor: COLORS.border,
+                          }}
+                          onPress={() => setEditingNotes(true)}
+                        >
+                          <MaterialCommunityIcons name="pencil-outline" size={12} color={COLORS.muted} />
+                          <Text style={{ color: COLORS.muted, fontSize: 11, fontWeight: '600' }}>
+                            {(selectedEntry.notes ?? '').trim().length > 0 ? 'Edit' : 'Tambah'}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+
+                    {editingNotes ? (
+                      <>
+                        <TextInput
+                          style={{
+                            color: COLORS.white,
+                            fontSize: 14,
+                            lineHeight: 22,
+                            minHeight: 120,
+                            textAlignVertical: 'top',
+                            backgroundColor: '#141E2E',
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: COLORS.accent,
+                            padding: 12,
+                            marginBottom: 10,
+                          }}
+                          value={notesText}
+                          onChangeText={setNotesText}
+                          placeholder="Tulis catatan riset, observasi, atau hasil pengamatan..."
+                          placeholderTextColor={COLORS.muted}
+                          multiline
+                          autoFocus
+                          selectionColor={COLORS.accent}
+                        />
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <TouchableOpacity
+                            style={{
+                              flex: 1, paddingVertical: 12, borderRadius: 10,
+                              borderWidth: 1, borderColor: COLORS.border,
+                              alignItems: 'center',
+                            }}
+                            onPress={() => { setEditingNotes(false); setNotesText(selectedEntry.notes ?? ''); }}
+                          >
+                            <Text style={{ color: COLORS.muted, fontSize: 13, fontWeight: '700' }}>Batal</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={{
+                              flex: 2, paddingVertical: 12, borderRadius: 10,
+                              backgroundColor: COLORS.accent, alignItems: 'center',
+                            }}
+                            onPress={saveNotes}
+                          >
+                            <Text style={{ color: COLORS.bg, fontSize: 13, fontWeight: '800' }}>Simpan Catatan</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </>
+                    ) : (selectedEntry.notes ?? '').trim().length > 0 ? (
+                      <Text style={{ color: COLORS.white, fontSize: 14, lineHeight: 22, backgroundColor: '#141E2E', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: COLORS.border }}>
+                        {selectedEntry.notes}
+                      </Text>
+                    ) : (
+                      <TouchableOpacity
+                        style={{
+                          borderRadius: 10, borderWidth: 1, borderColor: COLORS.border,
+                          borderStyle: 'dashed', padding: 16, alignItems: 'center', gap: 6,
+                        }}
+                        onPress={() => setEditingNotes(true)}
+                      >
+                        <MaterialCommunityIcons name="plus-circle-outline" size={22} color={COLORS.muted} />
+                        <Text style={{ color: COLORS.muted, fontSize: 13 }}>Ketuk untuk menambah catatan</Text>
+                        <Text style={{ color: COLORS.dim, fontSize: 11, textAlign: 'center' }}>
+                          Catat observasi, hasil pengamatan, atau catatan riset lainnya
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {/* Close */}
+                  <TouchableOpacity
+                    style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
+                    onPress={() => setShowDetail(false)}
+                  >
+                    <Text style={{ color: COLORS.muted, fontSize: 14, fontWeight: '700' }}>Tutup</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
+        )}
+      </>
+    );
+  }
+
+>>>>>>> Stashed changes
   // ── MAIN RENDER
   return (
     <SafeAreaView style={sharedStyles.safeArea}>
