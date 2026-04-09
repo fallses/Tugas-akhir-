@@ -16,6 +16,7 @@ export const COLORS = {
   white:      '#F0F4FF',
   muted:      '#4A5E78',
   danger:     '#FF4455',
+  text:       '#F0F4FF',
 };
 
 const shared = StyleSheet.create({
@@ -93,7 +94,10 @@ export const topBarStyles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1.5,
   },
+<<<<<<< aplikasi3
   // History button (SET phase only)
+=======
+>>>>>>> main
   historyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -301,6 +305,7 @@ export const setStyles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
+  // Dipertahankan untuk kompatibilitas (tidak dipakai di durasi)
   paramStepBtn: {
     width: 28,
     height: 28,
@@ -311,6 +316,7 @@ export const setStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // ── Input lama (kompatibilitas)
   paramInput: {
     color: COLORS.white,
     fontSize: 15,
@@ -319,10 +325,21 @@ export const setStyles = StyleSheet.create({
     textAlign: 'center',
     padding: 0,
   },
+  // ── Input ketik langsung — bersih, rata kanan, besar
+  paramInputClean: {
+    color: COLORS.white,
+    fontSize: 24,
+    fontWeight: '800',
+    textAlign: 'right',
+    minWidth: 52,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+  },
   paramUnit: {
     color: COLORS.muted,
-    fontSize: 11,
+    fontSize: 13,
     letterSpacing: 0.3,
+    minWidth: 36,
   },
   paramDivider: {
     height: 1,
@@ -602,6 +619,7 @@ export const runningStyles = StyleSheet.create({
     borderRadius: 3,
     overflow: 'hidden',
     marginTop: 20,
+    marginBottom: 0,
   },
   progressFill: {
     height: 6,
@@ -707,6 +725,22 @@ export const finishStyles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0.5,
   },
+  secondaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 14,
+    paddingHorizontal: 40,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  secondaryBtnText: {
+    color: COLORS.muted,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
 });
 
 // ─────────────────────────────────────────────────────────
@@ -733,6 +767,94 @@ export const bottomStyles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+});
+
+export const historyStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: COLORS.bg,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  headerTitle: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  empty: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    gap: 12,
+  },
+  emptyText: {
+    color: COLORS.muted,
+    fontSize: 14,
+  },
+  card: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  cardLeft: { flex: 1 },
+  cardAlat: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  cardId: {
+    color: COLORS.muted,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  statusBadge: {
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  cardDetails: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 8,
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  detailText: {
+    color: COLORS.muted,
+    fontSize: 12,
+  },
+  cardDate: {
+    color: COLORS.dim,
+    fontSize: 11,
   },
 });
 
