@@ -9,6 +9,7 @@ import {
   Animated,
   TextInput,
   ScrollView,
+  Modal,
 } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import sharedStyles, {
@@ -23,24 +24,24 @@ import sharedStyles, {
   bottomStyles,
 } from '../styles/ProcessScreen.styles';
 
+// ─────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────
 type Phase = 'set' | 'countdown' | 'ignition' | 'running' | 'finish';
 
-<<<<<<< Updated upstream
-=======
-interface HistoryEntry {
+export interface HistoryEntry {
   id: string;
   namaAlat: string;
   idAlat: string;
   suhu: string;
   tekanan: string;
-  durasi: string;
+  durasi: string;        // formatted HH:MM:SS
   selesaiPukul: string;
   tanggal: string;
   status: 'Berhasil' | 'Dihentikan';
   notes?: string;
 }
 
->>>>>>> Stashed changes
 interface Props {
   route: {
     params: {
@@ -51,6 +52,9 @@ interface Props {
   navigation: any;
 }
 
+// ─────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────
 const PHASES: { key: Phase; label: string; color: string }[] = [
   { key: 'set',       label: 'SET',     color: COLORS.accent },
   { key: 'countdown', label: 'HITUNG',  color: COLORS.accent },
@@ -61,55 +65,64 @@ const PHASES: { key: Phase; label: string; color: string }[] = [
 
 const IGNITION_MS = 3000;
 
-// Preset konfigurasi sterilisasi (jam, menit, suhu, tekanan)
 const PRESETS = [
   { label: 'Cepat',    jam: 0, menit: 15, suhu: 121, tekanan: 1.0 },
   { label: 'Standar',  jam: 0, menit: 20, suhu: 121, tekanan: 1.2 },
   { label: 'Intensif', jam: 0, menit: 30, suhu: 134, tekanan: 2.0 },
 ];
 
+// In-memory global history (gunakan AsyncStorage di produksi)
+export let globalHistory: HistoryEntry[] = [];
+
+// ─────────────────────────────────────────────────────────
+// Component
+// ─────────────────────────────────────────────────────────
 export default function ProcessScreen({ route, navigation }: Props) {
   const { namaAlat, idAlat } = route.params;
 
-  const [phase, setPhase]                   = useState<Phase>('set');
-  const [countValue, setCountValue]         = useState(3);
+  // Phase
+  const [phase, setPhase] = useState<Phase>('set');
+
+  // Countdown
+  const [countValue, setCountValue] = useState(3);
+
+  // Running
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [finishedAt, setFinishedAt]         = useState('');
+  const [sterilDetik, setSterilDetik]       = useState(20 * 60);
 
-<<<<<<< Updated upstream
-  // Setting state
-  const [selectedPreset, setSelectedPreset] = useState(1); // default Standar
+  // Finish
+  const [finishedAt, setFinishedAt] = useState('');
 
-  // ── Durasi: jam + menit
-  const [inputJam, setInputJam]     = useState('0');
-  const [inputMenit, setInputMenit] = useState('20');
-=======
-  // History detail + notes
+  // History list + detail/notes modal
+  const [history, setHistory]               = useState<HistoryEntry[]>(globalHistory);
+  const [showHistory, setShowHistory]       = useState(false);
   const [selectedEntry, setSelectedEntry]   = useState<HistoryEntry | null>(null);
   const [showDetail, setShowDetail]         = useState(false);
   const [editingNotes, setEditingNotes]     = useState(false);
   const [notesText, setNotesText]           = useState('');
 
-  // Ignition session state
+  // Ignition retry
   const [ignitionSession, setIgnitionSession] = useState(1);
   const [ignitionError, setIgnitionError]     = useState('');
+  const MAX_IGNITION_SESSIONS = 3;
+  const IGNITION_SESSION_MS   = IGNITION_MS;
 
+  // Preset + parameter inputs
   const [selectedPreset, setSelectedPreset] = useState(1);
   const [inputJam, setInputJam]             = useState('0');
   const [inputMenit, setInputMenit]         = useState('20');
   const [inputSuhu, setInputSuhu]           = useState('121');
   const [inputTekanan, setInputTekanan]     = useState('1.2');
-  const [sterilDetik, setSterilDetik]       = useState(20 * 60);
->>>>>>> Stashed changes
 
-  const [inputSuhu, setInputSuhu]         = useState('121');
-  const [inputTekanan, setInputTekanan]   = useState('1.2');
-  const [sterilDetik, setSterilDetik]     = useState(20 * 60);
-
-  // Simulasi monitoring suhu & tekanan (bergerak naik perlahan)
+  // Realtime monitoring simulation
   const [monitorSuhu, setMonitorSuhu]       = useState(28);
   const [monitorTekanan, setMonitorTekanan] = useState(1.0);
 
+  // Ref to track elapsed for stop (avoids stale closure)
+  const elapsedRef = useRef(0);
+  useEffect(() => { elapsedRef.current = elapsedSeconds; }, [elapsedSeconds]);
+
+  // ── Animated values
   const numberScale    = useRef(new Animated.Value(1)).current;
   const numberOpacity  = useRef(new Animated.Value(1)).current;
   const ringScale      = useRef(new Animated.Value(0.8)).current;
@@ -128,41 +141,63 @@ export default function ProcessScreen({ route, navigation }: Props) {
     Animated.timing(fadeIn, { toValue: 1, duration: 400, useNativeDriver: true }).start();
   }, [fadeIn]);
 
-  // Simulasi monitoring di fase set
+  // ─────────────────────────────────────────────────────
+  // Monitoring simulation (SET phase only)
+  // ─────────────────────────────────────────────────────
   useEffect(() => {
     if (phase !== 'set') return;
     const interval = setInterval(() => {
-      setMonitorSuhu(prev => {
-        const delta = (Math.random() - 0.5) * 0.4;
-        return parseFloat(Math.max(26, Math.min(32, prev + delta)).toFixed(1));
-      });
-      setMonitorTekanan(prev => {
-        const delta = (Math.random() - 0.5) * 0.02;
-        return parseFloat(Math.max(0.95, Math.min(1.05, prev + delta)).toFixed(2));
-      });
+      setMonitorSuhu(prev =>
+        parseFloat(Math.max(26, Math.min(32, prev + (Math.random() - 0.5) * 0.4)).toFixed(1))
+      );
+      setMonitorTekanan(prev =>
+        parseFloat(Math.max(0.95, Math.min(1.05, prev + (Math.random() - 0.5) * 0.02)).toFixed(2))
+      );
     }, 1500);
     return () => clearInterval(interval);
   }, [phase]);
 
-  // ── Helper: total durasi dalam detik
+  // ─────────────────────────────────────────────────────
+  // Helpers
+  // ─────────────────────────────────────────────────────
   function totalDetik(jam: string, menit: string): number {
     const j = parseInt(jam, 10)   || 0;
     const m = parseInt(menit, 10) || 0;
-    const total = j * 3600 + m * 60;
-    return total > 0 ? total : 60; // minimal 1 menit
+    return Math.max(60, j * 3600 + m * 60);
   }
 
-<<<<<<< Updated upstream
-  // ── Clamp helpers
-  function clampJam(val: number)   { return Math.max(0, Math.min(23, val)); }
-  function clampMenit(val: number) { return Math.max(0, Math.min(59, val)); }
-=======
-  function clampJam(val: number)     { return Math.max(0,   Math.min(23,  val)); }
-  function clampMenit(val: number)   { return Math.max(0,   Math.min(59,  val)); }
-  function clampSuhu(val: number)    { return Math.max(100, Math.min(150, val)); }
-  function clampTekanan(val: number) { return Math.max(0.5, Math.min(3.0, val)); }
->>>>>>> Stashed changes
+  function clampJam(v: number)    { return Math.max(0,   Math.min(23,  v)); }
+  function clampMenit(v: number)  { return Math.max(0,   Math.min(59,  v)); }
 
+  function formatTime(secs: number) {
+    const h  = Math.floor(secs / 3600);
+    const m  = Math.floor((secs % 3600) / 60);
+    const s  = secs % 60;
+    const mm = m.toString().padStart(2, '0');
+    const ss = s.toString().padStart(2, '0');
+    return h > 0 ? `${h.toString().padStart(2, '0')}:${mm}:${ss}` : `${mm}:${ss}`;
+  }
+
+  function formatDurasiLabel(jam: string, menit: string) {
+    const j = parseInt(jam, 10)   || 0;
+    const m = parseInt(menit, 10) || 0;
+    if (j > 0 && m > 0) return `${j}j ${m}m`;
+    if (j > 0)          return `${j} jam`;
+    return `${m} menit`;
+  }
+
+  function phaseColor() {
+    return PHASES.find(p => p.key === phase)?.color ?? COLORS.accent;
+  }
+
+  function goBack() {
+    if (navigation.canGoBack()) navigation.goBack();
+    else navigation.navigate('Dashboard');
+  }
+
+  // ─────────────────────────────────────────────────────
+  // Preset + input handlers
+  // ─────────────────────────────────────────────────────
   function applyPreset(index: number) {
     setSelectedPreset(index);
     const p = PRESETS[index];
@@ -173,15 +208,61 @@ export default function ProcessScreen({ route, navigation }: Props) {
   }
 
   function handleMulaiProses() {
-    const suhu    = parseFloat(inputSuhu)    || 121;
-    const tekanan = parseFloat(inputTekanan) || 1.2;
     setSterilDetik(totalDetik(inputJam, inputMenit));
-    setInputSuhu(suhu.toString());
-    setInputTekanan(tekanan.toString());
+    setIgnitionSession(1);
+    setIgnitionError('');
     setPhase('countdown');
   }
 
-  // ── COUNTDOWN
+  // ─────────────────────────────────────────────────────
+  // History helpers
+  // ─────────────────────────────────────────────────────
+  function saveHistory(status: 'Berhasil' | 'Dihentikan', durasiDetik: number) {
+    const now = new Date();
+    const entry: HistoryEntry = {
+      id: Date.now().toString(),
+      namaAlat,
+      idAlat,
+      suhu: inputSuhu,
+      tekanan: inputTekanan,
+      durasi: formatTime(durasiDetik),
+      selesaiPukul: now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      tanggal: now.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }),
+      status,
+    };
+    globalHistory = [entry, ...globalHistory].slice(0, 50);
+    setHistory([...globalHistory]);
+  }
+
+  function handleStop() {
+    saveHistory('Dihentikan', elapsedRef.current);
+    setPhase('set');
+    setElapsedSeconds(0);
+  }
+
+  function openDetail(entry: HistoryEntry) {
+    setSelectedEntry(entry);
+    setNotesText(entry.notes ?? '');
+    setEditingNotes(false);
+    setShowDetail(true);
+  }
+
+  function saveNotes() {
+    if (!selectedEntry) return;
+    const updated = globalHistory.map(e =>
+      e.id === selectedEntry.id ? { ...e, notes: notesText } : e
+    );
+    globalHistory = updated;
+    setHistory([...updated]);
+    setSelectedEntry(prev => prev ? { ...prev, notes: notesText } : prev);
+    setEditingNotes(false);
+  }
+
+  // ─────────────────────────────────────────────────────
+  // Phase effects
+  // ─────────────────────────────────────────────────────
+
+  // COUNTDOWN
   useEffect(() => {
     if (phase !== 'countdown') return;
     enterFade();
@@ -230,7 +311,7 @@ export default function ProcessScreen({ route, navigation }: Props) {
     ]).start(() => setTimeout(() => setPhase('ignition'), 800));
   }
 
-  // ── IGNITION
+  // IGNITION — dengan retry hingga MAX_IGNITION_SESSIONS
   useEffect(() => {
     if (phase !== 'ignition') return;
     enterFade();
@@ -238,7 +319,7 @@ export default function ProcessScreen({ route, navigation }: Props) {
 
     Animated.timing(ignitionBar, {
       toValue: 1,
-      duration: IGNITION_MS,
+      duration: IGNITION_SESSION_MS,
       useNativeDriver: false,
     }).start();
 
@@ -250,19 +331,36 @@ export default function ProcessScreen({ route, navigation }: Props) {
     );
     flicker.start();
 
+    // Simulasi MQTT: ~60% sukses per sesi
+    const mqttSuccess = Math.random() > 0.4;
+
     const timer = setTimeout(() => {
       flicker.stop();
-      setPhase('running');
-    }, IGNITION_MS);
+      if (mqttSuccess) {
+        setIgnitionError('');
+        setPhase('running');
+      } else {
+        if (ignitionSession < MAX_IGNITION_SESSIONS) {
+          setIgnitionSession(s => s + 1);
+          // useEffect re-runs karena ignitionSession berubah
+        } else {
+          setIgnitionError(
+            `Gagal terhubung ke perangkat setelah ${MAX_IGNITION_SESSIONS} percobaan. Periksa koneksi MQTT.`
+          );
+          setIgnitionSession(1);
+          setPhase('set');
+        }
+      }
+    }, IGNITION_SESSION_MS);
 
     return () => { clearTimeout(timer); flicker.stop(); };
-  }, [phase]);
+  }, [phase, ignitionSession]);
 
-  // ── RUNNING
+  // RUNNING — countdown dari sterilDetik → 0
   useEffect(() => {
     if (phase !== 'running') return;
     enterFade();
-    setElapsedSeconds(0);
+    setElapsedSeconds(sterilDetik);
 
     const pulse = Animated.loop(
       Animated.sequence([
@@ -274,24 +372,26 @@ export default function ProcessScreen({ route, navigation }: Props) {
 
     const tick = setInterval(() => {
       setElapsedSeconds(s => {
-        const next = s + 1;
-        if (next >= sterilDetik) {
+        const next = s - 1;
+        if (next <= 0) {
           clearInterval(tick);
           pulse.stop();
           const now = new Date();
           setFinishedAt(
             now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
           );
+          saveHistory('Berhasil', sterilDetik);
           setPhase('finish');
+          return 0;
         }
         return next;
       });
     }, 1000);
 
     return () => { clearInterval(tick); pulse.stop(); };
-  }, [phase]);
+  }, [phase, sterilDetik]);
 
-  // ── FINISH
+  // FINISH
   useEffect(() => {
     if (phase !== 'finish') return;
     enterFade();
@@ -299,47 +399,15 @@ export default function ProcessScreen({ route, navigation }: Props) {
     Animated.spring(checkScale, { toValue: 1, useNativeDriver: true, tension: 50, friction: 5 }).start();
   }, [phase]);
 
-  // ── HELPERS
-  /** Format detik → HH:MM:SS (jika ≥ 1 jam) atau MM:SS */
-  function formatTime(secs: number) {
-    const h = Math.floor(secs / 3600);
-    const m = Math.floor((secs % 3600) / 60);
-    const s = secs % 60;
-    const mm = m.toString().padStart(2, '0');
-    const ss = s.toString().padStart(2, '0');
-    if (h > 0) {
-      return `${h.toString().padStart(2, '0')}:${mm}:${ss}`;
-    }
-    return `${mm}:${ss}`;
-  }
-
-  /** Format durasi singkat untuk label, misal "1j 30m" atau "20m" */
-  function formatDurasiLabel(jam: string, menit: string) {
-    const j = parseInt(jam, 10)   || 0;
-    const m = parseInt(menit, 10) || 0;
-    if (j > 0 && m > 0) return `${j}j ${m}m`;
-    if (j > 0)          return `${j} jam`;
-    return `${m} menit`;
-  }
-
-  function phaseColor() {
-    return PHASES.find(p => p.key === phase)?.color ?? COLORS.accent;
-  }
-
-  function goBack() {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      navigation.navigate('Dashboard');
-    }
-  }
-
-  // ── RENDERS
+  // ─────────────────────────────────────────────────────
+  // Renders
+  // ─────────────────────────────────────────────────────
 
   function renderTopBar() {
     const color  = phaseColor();
     const isLive = phase === 'running' || phase === 'ignition';
     const label  = isLive ? 'LIVE' : phase === 'finish' ? 'DONE' : 'READY';
+
     return (
       <View style={topBarStyles.container}>
         <Pressable
@@ -349,14 +417,26 @@ export default function ProcessScreen({ route, navigation }: Props) {
         >
           <MaterialCommunityIcons name="arrow-left" size={18} color={COLORS.muted} />
         </Pressable>
+
         <View style={topBarStyles.titleBlock}>
           <Text style={topBarStyles.title}>{namaAlat}</Text>
           <Text style={topBarStyles.subtitle}>ID: {idAlat}</Text>
         </View>
-        <View style={[topBarStyles.badge, isLive && { borderColor: color }]}>
-          <View style={[topBarStyles.badgeDot, { backgroundColor: color }]} />
-          <Text style={[topBarStyles.badgeText, { color }]}>{label}</Text>
-        </View>
+
+        {phase === 'set' ? (
+          <TouchableOpacity
+            style={topBarStyles.historyBtn}
+            onPress={() => setShowHistory(true)}
+          >
+            <MaterialCommunityIcons name="history" size={16} color={COLORS.muted} />
+            <Text style={topBarStyles.historyBtnText}>Riwayat</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={[topBarStyles.badge, isLive && { borderColor: color }]}>
+            <View style={[topBarStyles.badgeDot, { backgroundColor: color }]} />
+            <Text style={[topBarStyles.badgeText, { color }]}>{label}</Text>
+          </View>
+        )}
       </View>
     );
   }
@@ -397,41 +477,47 @@ export default function ProcessScreen({ route, navigation }: Props) {
         contentContainerStyle={setStyles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* Error banner dari ignition gagal */}
+        {ignitionError !== '' && (
+          <View style={{
+            backgroundColor: '#3a1010',
+            borderColor: COLORS.danger,
+            borderWidth: 1,
+            borderRadius: 10,
+            padding: 12,
+            marginBottom: 12,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+          }}>
+            <MaterialCommunityIcons name="alert-circle-outline" size={18} color={COLORS.danger} />
+            <Text style={{ color: COLORS.danger, fontSize: 13, flex: 1 }}>{ignitionError}</Text>
+          </View>
+        )}
+
         {/* Monitoring Realtime */}
         <View style={setStyles.monitorCard}>
           <Text style={setStyles.monitorTitle}>Monitoring Saat Ini</Text>
           <View style={setStyles.monitorRow}>
-
-            {/* Suhu */}
             <View style={setStyles.monitorItem}>
               <MaterialCommunityIcons name="thermometer" size={20} color={COLORS.fire} />
               <Text style={setStyles.monitorValue}>{monitorSuhu}°C</Text>
               <Text style={setStyles.monitorLabel}>Suhu</Text>
               <View style={setStyles.monitorTrack}>
-                <View style={[setStyles.monitorFill, {
-                  width: `${suhuPct}%`,
-                  backgroundColor: COLORS.fire,
-                }]} />
+                <View style={[setStyles.monitorFill, { width: `${suhuPct}%`, backgroundColor: COLORS.fire }]} />
               </View>
               <Text style={setStyles.monitorPct}>{suhuPct.toFixed(0)}% target</Text>
             </View>
-
             <View style={setStyles.monitorDivider} />
-
-            {/* Tekanan */}
             <View style={setStyles.monitorItem}>
               <MaterialCommunityIcons name="gauge" size={20} color={COLORS.accent} />
               <Text style={setStyles.monitorValue}>{monitorTekanan} bar</Text>
               <Text style={setStyles.monitorLabel}>Tekanan</Text>
               <View style={setStyles.monitorTrack}>
-                <View style={[setStyles.monitorFill, {
-                  width: `${tekananPct}%`,
-                  backgroundColor: COLORS.accent,
-                }]} />
+                <View style={[setStyles.monitorFill, { width: `${tekananPct}%`, backgroundColor: COLORS.accent }]} />
               </View>
               <Text style={setStyles.monitorPct}>{tekananPct.toFixed(0)}% target</Text>
             </View>
-
           </View>
         </View>
 
@@ -458,62 +544,58 @@ export default function ProcessScreen({ route, navigation }: Props) {
         <Text style={setStyles.sectionLabel}>Parameter</Text>
         <View style={setStyles.paramCard}>
 
-          {/* ── Durasi: JAM + MENIT ── */}
+          {/* Durasi */}
           <View style={setStyles.paramRow}>
             <View style={setStyles.paramLeft}>
               <MaterialCommunityIcons name="timer-outline" size={18} color={COLORS.accent} />
               <Text style={setStyles.paramName}>Durasi Steril</Text>
             </View>
-
-            {/* Kontrol Jam */}
-            <View style={setStyles.paramInputWrap}>
-              <TouchableOpacity
-                style={setStyles.paramStepBtn}
-                onPress={() => setInputJam(j => clampJam((parseInt(j) || 0) - 1).toString())}
-              >
-                <MaterialCommunityIcons name="minus" size={14} color={COLORS.muted} />
-              </TouchableOpacity>
-              <TextInput
-                style={setStyles.paramInput}
-                value={inputJam}
-                onChangeText={v => setInputJam(clampJam(parseInt(v) || 0).toString())}
-                keyboardType="numeric"
-                maxLength={2}
-              />
-              <Text style={setStyles.paramUnit}>jam</Text>
-              <TouchableOpacity
-                style={setStyles.paramStepBtn}
-                onPress={() => setInputJam(j => clampJam((parseInt(j) || 0) + 1).toString())}
-              >
-                <MaterialCommunityIcons name="plus" size={14} color={COLORS.muted} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Separator titik dua */}
-            <Text style={{ color: COLORS.muted, marginHorizontal: 4, fontSize: 16, fontWeight: 'bold' }}>:</Text>
-
-            {/* Kontrol Menit */}
-            <View style={setStyles.paramInputWrap}>
-              <TouchableOpacity
-                style={setStyles.paramStepBtn}
-                onPress={() => setInputMenit(m => clampMenit((parseInt(m) || 0) - 1).toString())}
-              >
-                <MaterialCommunityIcons name="minus" size={14} color={COLORS.muted} />
-              </TouchableOpacity>
-              <TextInput
-                style={setStyles.paramInput}
-                value={inputMenit}
-                onChangeText={v => setInputMenit(clampMenit(parseInt(v) || 0).toString())}
-                keyboardType="numeric"
-                maxLength={2}
-              />
-              <Text style={setStyles.paramUnit}>menit</Text>
-              <TouchableOpacity
-                style={setStyles.paramStepBtn}
-                onPress={() => setInputMenit(m => clampMenit((parseInt(m) || 0) + 1).toString())}
-              >
-                <MaterialCommunityIcons name="plus" size={14} color={COLORS.muted} />
-              </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={setStyles.paramInputWrap}>
+                {/* <TouchableOpacity
+                  style={setStyles.paramStepBtn}
+                  onPress={() => setInputJam(j => clampJam((parseInt(j) || 0) - 1).toString())}
+                >
+                  <MaterialCommunityIcons name="minus" size={14} color={COLORS.muted} />
+                </TouchableOpacity> */}
+                <TextInput
+                  style={setStyles.paramInput}
+                  value={inputJam}
+                  onChangeText={v => setInputJam(clampJam(parseInt(v.replace(/[^0-9]/g, '')) || 0).toString())}
+                  keyboardType="numeric"
+                  maxLength={2}
+                />
+                <Text style={setStyles.paramUnit}>j</Text>
+                {/* <TouchableOpacity
+                  style={setStyles.paramStepBtn}
+                  onPress={() => setInputJam(j => clampJam((parseInt(j) || 0) + 1).toString())}
+                >
+                  <MaterialCommunityIcons name="plus" size={14} color={COLORS.muted} />
+                </TouchableOpacity> */}
+              </View>
+              <Text style={{ color: COLORS.muted, fontSize: 16, fontWeight: 'bold' }}>:</Text>
+              <View style={setStyles.paramInputWrap}>
+                {/* <TouchableOpacity
+                  style={setStyles.paramStepBtn}
+                  onPress={() => setInputMenit(m => clampMenit((parseInt(m) || 0) - 1).toString())}
+                >
+                  <MaterialCommunityIcons name="minus" size={14} color={COLORS.muted} />
+                </TouchableOpacity> */}
+                <TextInput
+                  style={setStyles.paramInput}
+                  value={inputMenit}
+                  onChangeText={v => setInputMenit(clampMenit(parseInt(v.replace(/[^0-9]/g, '')) || 0).toString())}
+                  keyboardType="numeric"
+                  maxLength={2}
+                />
+                <Text style={setStyles.paramUnit}>m</Text>
+                {/* <TouchableOpacity
+                  style={setStyles.paramStepBtn}
+                  onPress={() => setInputMenit(m => clampMenit((parseInt(m) || 0) + 1).toString())}
+                >
+                  <MaterialCommunityIcons name="plus" size={14} color={COLORS.muted} />
+                </TouchableOpacity> */}
+              </View>
             </View>
           </View>
 
@@ -523,91 +605,25 @@ export default function ProcessScreen({ route, navigation }: Props) {
           <View style={setStyles.paramRow}>
             <View style={setStyles.paramLeft}>
               <MaterialCommunityIcons name="thermometer-high" size={18} color={COLORS.fire} />
-              <Text style={setStyles.paramName}>Suhu Target</Text>
-            </View>
-            <View style={setStyles.paramInputWrap}>
-              <TouchableOpacity
-                style={setStyles.paramStepBtn}
-                onPress={() => setInputSuhu(s => Math.max(100, (parseInt(s) || 100) - 1).toString())}
-              >
-                <MaterialCommunityIcons name="minus" size={14} color={COLORS.muted} />
-              </TouchableOpacity>
-              <TextInput
-                style={setStyles.paramInput}
-                value={inputSuhu}
-                onChangeText={setInputSuhu}
-                keyboardType="numeric"
-                maxLength={3}
-              />
-              <Text style={setStyles.paramUnit}>°C</Text>
-              <TouchableOpacity
-                style={setStyles.paramStepBtn}
-                onPress={() => setInputSuhu(s => Math.min(150, (parseInt(s) || 100) + 1).toString())}
-              >
-                <MaterialCommunityIcons name="plus" size={14} color={COLORS.muted} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={setStyles.paramDivider} />
-
-          {/* Tekanan */}
-          <View style={setStyles.paramRow}>
-            <View style={setStyles.paramLeft}>
-              <MaterialCommunityIcons name="gauge" size={18} color={COLORS.accent} />
-              <Text style={setStyles.paramName}>Tekanan Target</Text>
-            </View>
-            <View style={setStyles.paramInputWrap}>
-              <TouchableOpacity
-                style={setStyles.paramStepBtn}
-                onPress={() => setInputTekanan(t => Math.max(0.5, parseFloat((parseFloat(t) - 0.1).toFixed(1))).toString())}
-              >
-                <MaterialCommunityIcons name="minus" size={14} color={COLORS.muted} />
-              </TouchableOpacity>
-              <TextInput
-                style={setStyles.paramInput}
-                value={inputTekanan}
-                onChangeText={setInputTekanan}
-                keyboardType="decimal-pad"
-                maxLength={4}
-              />
-              <Text style={setStyles.paramUnit}>bar</Text>
-              <TouchableOpacity
-                style={setStyles.paramStepBtn}
-                onPress={() => setInputTekanan(t => Math.min(3.0, parseFloat((parseFloat(t) + 0.1).toFixed(1))).toString())}
-              >
-                <MaterialCommunityIcons name="plus" size={14} color={COLORS.muted} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-        </View>
-
-<<<<<<< Updated upstream
-        {/* Tombol Mulai */}
-=======
-        {/* Suhu & Tekanan Target */}
-        <Text style={setStyles.sectionLabel}>Parameter Target</Text>
-        <View style={setStyles.paramCard}>
-
-          {/* Suhu Target: 100–150°C — hard clamp saat ketik */}
-          <View style={setStyles.paramRow}>
-            <View style={setStyles.paramLeft}>
-              <MaterialCommunityIcons name="thermometer-high" size={18} color={COLORS.fire} />
               <View>
                 <Text style={setStyles.paramName}>Suhu Target</Text>
-                <Text style={setStyles.paramInput}>100 – 150 °C</Text>
+                <Text style={{ color: COLORS.muted, fontSize: 10, marginTop: 1 }}>100 – 150 °C</Text>
               </View>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {/* <TouchableOpacity
+                style={setStyles.paramStepBtn}
+                onPress={() => setInputSuhu(s => Math.max(100, (parseInt(s) || 121) - 1).toString())}
+              >
+                <MaterialCommunityIcons name="minus" size={14} color={COLORS.muted} />
+              </TouchableOpacity> */}
               <TextInput
-                style={[setStyles.paramInputClean, { color: COLORS.fire }]}
+                style={[setStyles.paramInput, { color: COLORS.fire, minWidth: 44 }]}
                 value={inputSuhu}
                 onChangeText={v => {
                   const raw = v.replace(/[^0-9]/g, '');
                   if (raw === '') { setInputSuhu(''); return; }
                   const num = parseInt(raw, 10);
-                  // Tolak langsung jika sudah melewati batas atas
                   if (num > 150) return;
                   setInputSuhu(raw);
                 }}
@@ -623,33 +639,45 @@ export default function ProcessScreen({ route, navigation }: Props) {
                 placeholderTextColor={COLORS.muted}
               />
               <Text style={setStyles.paramUnit}>°C</Text>
+              {/* <TouchableOpacity
+                style={setStyles.paramStepBtn}
+                onPress={() => setInputSuhu(s => Math.min(150, (parseInt(s) || 121) + 1).toString())}
+              >
+                <MaterialCommunityIcons name="plus" size={14} color={COLORS.muted} />
+              </TouchableOpacity> */}
             </View>
           </View>
 
           <View style={setStyles.paramDivider} />
 
-          {/* Tekanan Target: 0.5–3.0 bar — hard clamp saat ketik */}
+          {/* Tekanan */}
           <View style={setStyles.paramRow}>
             <View style={setStyles.paramLeft}>
               <MaterialCommunityIcons name="gauge" size={18} color={COLORS.accent} />
               <View>
                 <Text style={setStyles.paramName}>Tekanan Target</Text>
-                <Text style={setStyles.paramInput}>0.5 – 3.0 bar</Text>
+                <Text style={{ color: COLORS.muted, fontSize: 10, marginTop: 1 }}>0.5 – 3.0 bar</Text>
               </View>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {/* <TouchableOpacity
+                style={setStyles.paramStepBtn}
+                onPress={() =>
+                  setInputTekanan(t =>
+                    Math.max(0.5, parseFloat((parseFloat(t) - 0.1).toFixed(1))).toString()
+                  )
+                }
+              >
+                <MaterialCommunityIcons name="minus" size={14} color={COLORS.muted} />
+              </TouchableOpacity> */}
               <TextInput
-                style={setStyles.paramInputClean}
+                style={[setStyles.paramInput, { minWidth: 44 }]}
                 value={inputTekanan}
                 onChangeText={v => {
-                  // Hanya izinkan angka dan satu titik desimal
                   const clean = v.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
-                  // Izinkan string kosong atau sedang mengetik desimal ("1.", "0.")
                   if (clean === '' || clean === '.') { setInputTekanan(clean); return; }
                   const num = parseFloat(clean);
-                  if (isNaN(num)) return;
-                  // Tolak langsung jika melewati batas atas
-                  if (num > 3.0) return;
+                  if (isNaN(num) || num > 3.0) return;
                   setInputTekanan(clean);
                 }}
                 onBlur={() => {
@@ -667,17 +695,25 @@ export default function ProcessScreen({ route, navigation }: Props) {
                 placeholderTextColor={COLORS.muted}
               />
               <Text style={setStyles.paramUnit}>bar</Text>
+              <TouchableOpacity
+                // style={setStyles.paramStepBtn}
+                onPress={() =>
+                  setInputTekanan(t =>
+                    Math.min(3.0, parseFloat((parseFloat(t) + 0.1).toFixed(1))).toString()
+                  )
+                }
+              >
+                {/* <MaterialCommunityIcons name="plus" size={14} color={COLORS.muted} /> */}
+              </TouchableOpacity>
             </View>
           </View>
 
         </View>
 
->>>>>>> Stashed changes
         <TouchableOpacity style={setStyles.startBtn} onPress={handleMulaiProses}>
           <MaterialCommunityIcons name="play" size={18} color={COLORS.bg} />
           <Text style={setStyles.startBtnText}>Mulai Proses</Text>
         </TouchableOpacity>
-
       </ScrollView>
     );
   }
@@ -689,10 +725,14 @@ export default function ProcessScreen({ route, navigation }: Props) {
         <View style={countStyles.centerBox}>
           <Animated.View style={[countStyles.ringOuter, { transform: [{ scale: ringOuterScale }] }]} />
           <Animated.View style={[countStyles.ring, { transform: [{ scale: ringScale }], opacity: ringOpacity }]} />
-          <Animated.Text style={[countStyles.number, { transform: [{ scale: numberScale }], opacity: numberOpacity }]}>
+          <Animated.Text
+            style={[countStyles.number, { transform: [{ scale: numberScale }], opacity: numberOpacity }]}
+          >
             {countValue > 0 ? countValue : ''}
           </Animated.Text>
-          <Animated.Text style={[countStyles.mulai, { opacity: mulaiOpacity, transform: [{ scale: mulaiScale }], position: 'absolute' }]}>
+          <Animated.Text
+            style={[countStyles.mulai, { opacity: mulaiOpacity, transform: [{ scale: mulaiScale }], position: 'absolute' }]}
+          >
             Mulai!
           </Animated.Text>
         </View>
@@ -711,25 +751,34 @@ export default function ProcessScreen({ route, navigation }: Props) {
           </Animated.View>
         </View>
         <Text style={ignitionStyles.title}>Ignition</Text>
-        <Text style={ignitionStyles.subtitle}>Menyalakan pemanas...</Text>
+        <Text style={ignitionStyles.subtitle}>
+          Menghubungkan ke perangkat... (Sesi {ignitionSession}/{MAX_IGNITION_SESSIONS})
+        </Text>
         <View style={ignitionStyles.barTrack}>
           <Animated.View style={[ignitionStyles.barFill, { width: barWidth }]} />
         </View>
-        <Text style={ignitionStyles.barLabel}>Menginisialisasi sistem</Text>
+        <Text style={ignitionStyles.barLabel}>
+          {ignitionSession > 1
+            ? `Percobaan ${ignitionSession} dari ${MAX_IGNITION_SESSIONS}`
+            : 'Menginisialisasi sistem'}
+        </Text>
       </Animated.View>
     );
   }
 
   function renderRunning() {
-    const progress = Math.min(elapsedSeconds / sterilDetik, 1);
+    const remaining = elapsedSeconds;
+    const progress  = Math.min(1 - remaining / sterilDetik, 1);
+    const pct       = Math.round(progress * 100);
+
     return (
       <Animated.View style={[runningStyles.wrapper, { opacity: fadeIn }]}>
         <Animated.View style={[runningStyles.iconRing, { transform: [{ scale: pulseAnim }] }]}>
           <MaterialCommunityIcons name="atom" size={50} color={COLORS.green} />
         </Animated.View>
         <Text style={runningStyles.label}>Sterilisasi Berjalan</Text>
-        <Text style={runningStyles.timer}>{formatTime(elapsedSeconds)}</Text>
-        <Text style={runningStyles.timerSub}>Durasi aktif</Text>
+        <Text style={runningStyles.timer}>{formatTime(remaining)}</Text>
+        <Text style={runningStyles.timerSub}>Sisa waktu</Text>
         <View style={runningStyles.statsRow}>
           <View style={runningStyles.statCard}>
             <MaterialCommunityIcons name="thermometer-high" size={20} color={COLORS.fire} />
@@ -741,16 +790,12 @@ export default function ProcessScreen({ route, navigation }: Props) {
             <Text style={runningStyles.statValue}>{inputTekanan} bar</Text>
             <Text style={runningStyles.statLabel}>Tekanan</Text>
           </View>
-          {/* <View style={runningStyles.statCard}> */}
-            {/* <MaterialCommunityIcons name="water-percent" size={20} color={COLORS.green} /> */}
-            {/* <Text style={runningStyles.statValue}>98%</Text> */}
-            {/* <Text style={runningStyles.statLabel}>Uap</Text> */}
-          {/* </View> */}
         </View>
         <View style={runningStyles.progressTrack}>
-          <View style={[runningStyles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
+          <View style={[runningStyles.progressFill, { width: `${pct}%` }]} />
         </View>
-        <Text style={runningStyles.progressLabel}>{Math.round(progress * 100)}% selesai</Text>
+        <Text style={runningStyles.progressPct}>{pct}%</Text>
+        <Text style={runningStyles.progressLabel}>selesai</Text>
       </Animated.View>
     );
   }
@@ -766,135 +811,187 @@ export default function ProcessScreen({ route, navigation }: Props) {
           Proses sterilisasi telah berhasil diselesaikan. Alat siap digunakan.
         </Text>
         <View style={finishStyles.summaryBox}>
-          <View style={finishStyles.summaryRow}>
-            <Text style={finishStyles.summaryKey}>Alat</Text>
-            <Text style={finishStyles.summaryValue}>{namaAlat}</Text>
-          </View>
-          <View style={finishStyles.divider} />
-          <View style={finishStyles.summaryRow}>
-            <Text style={finishStyles.summaryKey}>Suhu</Text>
-            <Text style={finishStyles.summaryValue}>{inputSuhu}°C</Text>
-          </View>
-          <View style={finishStyles.divider} />
-          <View style={finishStyles.summaryRow}>
-            <Text style={finishStyles.summaryKey}>Tekanan</Text>
-            <Text style={finishStyles.summaryValue}>{inputTekanan} bar</Text>
-          </View>
-          <View style={finishStyles.divider} />
-          <View style={finishStyles.summaryRow}>
-            <Text style={finishStyles.summaryKey}>Durasi Total</Text>
-            <Text style={finishStyles.summaryValue}>{formatTime(elapsedSeconds)}</Text>
-          </View>
-          <View style={finishStyles.divider} />
-          <View style={finishStyles.summaryRow}>
-            <Text style={finishStyles.summaryKey}>Selesai Pukul</Text>
-            <Text style={finishStyles.summaryValue}>{finishedAt}</Text>
-          </View>
-          <View style={finishStyles.divider} />
-          <View style={finishStyles.summaryRow}>
-            <Text style={finishStyles.summaryKey}>Status</Text>
-            <Text style={[finishStyles.summaryValue, { color: COLORS.green }]}>✓ Berhasil</Text>
-          </View>
+          {[
+            { key: 'Alat',         value: namaAlat },
+            { key: 'Suhu',         value: `${inputSuhu}°C` },
+            { key: 'Tekanan',      value: `${inputTekanan} bar` },
+            { key: 'Durasi Total', value: formatTime(sterilDetik) },
+            { key: 'Selesai Pukul',value: finishedAt },
+            { key: 'Status',       value: '✓ Berhasil', color: COLORS.green },
+          ].map((row, i, arr) => (
+            <React.Fragment key={row.key}>
+              <View style={finishStyles.summaryRow}>
+                <Text style={finishStyles.summaryKey}>{row.key}</Text>
+                <Text style={[finishStyles.summaryValue, row.color ? { color: row.color } : undefined]}>
+                  {row.value}
+                </Text>
+              </View>
+              {i < arr.length - 1 && <View style={finishStyles.divider} />}
+            </React.Fragment>
+          ))}
         </View>
-        <TouchableOpacity style={finishStyles.doneBtn} onPress={goBack}>
-          <MaterialCommunityIcons name="home-outline" size={18} color={COLORS.bg} />
-          <Text style={finishStyles.doneBtnText}>Kembali ke Dashboard</Text>
+
+        <TouchableOpacity
+          style={finishStyles.doneBtn}
+          onPress={() => setPhase('set')}
+        >
+          <MaterialCommunityIcons name="refresh" size={18} color={COLORS.bg} />
+          <Text style={finishStyles.doneBtnText}>Proses Baru</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[finishStyles.doneBtn, {
+            backgroundColor: 'transparent',
+            borderWidth: 1,
+            borderColor: COLORS.border,
+            marginTop: 10,
+          }]}
+          onPress={goBack}
+        >
+          <MaterialCommunityIcons name="home-outline" size={18} color={COLORS.muted} />
+          <Text style={[finishStyles.doneBtnText, { color: COLORS.muted }]}>Kembali ke Dashboard</Text>
         </TouchableOpacity>
       </Animated.View>
     );
   }
 
-<<<<<<< Updated upstream
-=======
-  // ── HISTORY MODAL
-  function openDetail(entry: HistoryEntry) {
-    setSelectedEntry(entry);
-    setNotesText(entry.notes ?? '');
-    setEditingNotes(false);
-    setShowDetail(true);
-  }
-
-  function saveNotes() {
-    if (!selectedEntry) return;
-    const updated = history.map(e =>
-      e.id === selectedEntry.id ? { ...e, notes: notesText } : e
-    );
-    globalHistory = updated;
-    setHistory(updated);
-    setSelectedEntry(prev => prev ? { ...prev, notes: notesText } : prev);
-    setEditingNotes(false);
-  }
-
+  // ─────────────────────────────────────────────────────
+  // History Modal (list + detail/notes)
+  // ─────────────────────────────────────────────────────
   function renderHistoryModal() {
     return (
       <>
-        {/* ── LIST MODAL */}
+        {/* LIST MODAL */}
         <Modal
           visible={showHistory}
           transparent
           animationType="slide"
           onRequestClose={() => setShowHistory(false)}
         >
-          <View style={historyStyles.overlay}>
-            <View style={historyStyles.sheet}>
-              <View style={historyStyles.header}>
-                <Text style={historyStyles.headerTitle}>Riwayat Proses</Text>
+          <View style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            justifyContent: 'flex-end',
+          }}>
+            <View style={{
+              backgroundColor: COLORS.bg,
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              padding: 20,
+              maxHeight: '80%',
+              borderTopWidth: 1,
+              borderColor: COLORS.border,
+            }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <Text style={{ color: COLORS.white, fontSize: 16, fontWeight: '700' }}>Riwayat Proses</Text>
                 <TouchableOpacity onPress={() => setShowHistory(false)}>
                   <MaterialCommunityIcons name="close" size={22} color={COLORS.muted} />
                 </TouchableOpacity>
               </View>
 
               {history.length === 0 ? (
-                <View style={historyStyles.empty}>
+                <View style={{ alignItems: 'center', paddingVertical: 48, gap: 12 }}>
                   <MaterialCommunityIcons name="history" size={48} color={COLORS.dim} />
-                  <Text style={historyStyles.emptyText}>Belum ada riwayat proses</Text>
+                  <Text style={{ color: COLORS.muted, fontSize: 14 }}>Belum ada riwayat proses</Text>
                 </View>
               ) : (
                 <ScrollView showsVerticalScrollIndicator={false}>
-                  {history.map((entry) => {
+                  {history.map(entry => {
                     const hasNotes = (entry.notes ?? '').trim().length > 0;
-                    const color = entry.status === 'Berhasil' ? COLORS.green : COLORS.danger;
+                    const color    = entry.status === 'Berhasil' ? COLORS.green : COLORS.danger;
                     return (
                       <TouchableOpacity
                         key={entry.id}
-                        style={historyStyles.card}
+                        style={{
+                          backgroundColor: COLORS.surface,
+                          borderRadius: 12,
+                          padding: 14,
+                          marginBottom: 10,
+                          borderWidth: 1,
+                          borderColor: COLORS.border,
+                        }}
                         onPress={() => openDetail(entry)}
                         activeOpacity={0.75}
                       >
-                        <View style={historyStyles.cardHeader}>
-                          <View style={historyStyles.cardLeft}>
-                            <Text style={historyStyles.cardAlat}>{entry.namaAlat}</Text>
-                            <Text style={historyStyles.cardId}>{entry.idAlat}</Text>
+                        {/* Header row */}
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ color: COLORS.white, fontSize: 14, fontWeight: '600' }}>{entry.namaAlat}</Text>
+                            <Text style={{ color: COLORS.muted, fontSize: 11, marginTop: 2 }}>{entry.idAlat}</Text>
                           </View>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                             {hasNotes && (
                               <MaterialCommunityIcons name="note-text-outline" size={14} color={COLORS.gold} />
                             )}
-                            <View style={[historyStyles.statusBadge, { borderColor: color }]}>
-                              <Text style={[historyStyles.statusText, { color }]}>{entry.status}</Text>
+                            <View style={{ borderWidth: 1, borderColor: color, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 }}>
+                              <Text style={{ color, fontSize: 11, fontWeight: '600' }}>{entry.status}</Text>
                             </View>
                           </View>
                         </View>
-                        <View style={historyStyles.cardDetails}>
-                          <View style={historyStyles.detailItem}>
-                            <MaterialCommunityIcons name="thermometer-high" size={14} color={COLORS.fire} />
-                            <Text style={historyStyles.detailText}>{entry.suhu}°C</Text>
-                          </View>
-                          <View style={historyStyles.detailItem}>
-                            <MaterialCommunityIcons name="gauge" size={14} color={COLORS.accent} />
-                            <Text style={historyStyles.detailText}>{entry.tekanan} bar</Text>
-                          </View>
-                          <View style={historyStyles.detailItem}>
-                            <MaterialCommunityIcons name="timer-outline" size={14} color={COLORS.muted} />
-                            <Text style={historyStyles.detailText}>{entry.durasi}</Text>
-                          </View>
+
+                        {/* Detail chips */}
+                        <View style={{ flexDirection: 'row', gap: 14, marginBottom: hasNotes ? 8 : 0 }}>
+                          {[
+                            { icon: 'thermometer-high', text: `${entry.suhu}°C`,       color: COLORS.fire },
+                            { icon: 'gauge',            text: `${entry.tekanan} bar`,  color: COLORS.accent },
+                            { icon: 'timer-outline',    text: entry.durasi,            color: COLORS.muted },
+                          ].map(d => (
+                            <View key={d.icon} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                              <MaterialCommunityIcons name={d.icon as any} size={13} color={d.color} />
+                              <Text style={{ color: COLORS.muted, fontSize: 12 }}>{d.text}</Text>
+                            </View>
+                          ))}
                         </View>
+
+                        {/* Notes preview */}
                         {hasNotes && (
-                          <Text style={{ color: COLORS.gold, fontSize: 11, fontStyle: 'italic', marginTop: 4 }} numberOfLines={1}>
-                            📝 {entry.notes}
-                          </Text>
+                          <View style={{
+                            backgroundColor: '#1F1800',
+                            borderWidth: 1,
+                            borderColor: '#3A2E00',
+                            borderRadius: 6,
+                            paddingHorizontal: 8,
+                            paddingVertical: 5,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 5,
+                            marginBottom: 6,
+                          }}>
+                            <MaterialCommunityIcons name="note-text-outline" size={11} color={COLORS.gold} />
+                            <Text style={{ color: COLORS.gold, fontSize: 11, flex: 1, opacity: 0.9 }} numberOfLines={1}>
+                              {entry.notes}
+                            </Text>
+                          </View>
                         )}
-                        <Text style={historyStyles.cardDate}>{entry.tanggal} · {entry.selesaiPukul}</Text>
+
+                        {/* Date */}
+                        <Text style={{ color: COLORS.dim, fontSize: 11, marginTop: hasNotes ? 0 : 4 }}>
+                          {entry.tanggal} · {entry.selesaiPukul}
+                        </Text>
+
+                        {/* Quick-add notes bar */}
+                        {!hasNotes && (
+                          <TouchableOpacity
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 5,
+                              marginTop: 10,
+                              paddingTop: 8,
+                              borderTopWidth: 1,
+                              borderTopColor: COLORS.border,
+                            }}
+                            onPress={() => {
+                              openDetail(entry);
+                              setTimeout(() => setEditingNotes(true), 350);
+                            }}
+                          >
+                            <MaterialCommunityIcons name="plus-circle-outline" size={13} color={COLORS.muted} />
+                            <Text style={{ color: COLORS.muted, fontSize: 11, fontStyle: 'italic' }}>
+                              Tambah catatan
+                            </Text>
+                          </TouchableOpacity>
+                        )}
                       </TouchableOpacity>
                     );
                   })}
@@ -904,7 +1001,7 @@ export default function ProcessScreen({ route, navigation }: Props) {
           </View>
         </Modal>
 
-        {/* ── DETAIL + NOTES MODAL */}
+        {/* DETAIL + NOTES MODAL */}
         {selectedEntry && (
           <Modal
             visible={showDetail}
@@ -912,11 +1009,7 @@ export default function ProcessScreen({ route, navigation }: Props) {
             animationType="slide"
             onRequestClose={() => setShowDetail(false)}
           >
-            <View style={{
-              flex: 1,
-              backgroundColor: 'rgba(0,0,0,0.65)',
-              justifyContent: 'flex-end',
-            }}>
+            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' }}>
               <View style={{
                 backgroundColor: COLORS.bg,
                 borderTopLeftRadius: 24,
@@ -937,7 +1030,7 @@ export default function ProcessScreen({ route, navigation }: Props) {
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
                 >
-                  {/* Header status */}
+                  {/* Status header */}
                   <View style={{ alignItems: 'center', marginBottom: 20, gap: 6 }}>
                     <View style={{
                       width: 64, height: 64, borderRadius: 32,
@@ -973,19 +1066,25 @@ export default function ProcessScreen({ route, navigation }: Props) {
                       Detail Proses
                     </Text>
                     {[
-                      { icon: 'thermometer-high', label: 'Suhu',         value: `${selectedEntry.suhu}°C`,       color: COLORS.fire },
-                      { icon: 'gauge',            label: 'Tekanan',      value: `${selectedEntry.tekanan} bar`,  color: COLORS.accent },
-                      { icon: 'timer-outline',    label: 'Durasi',       value: selectedEntry.durasi },
-                      { icon: 'calendar-outline', label: 'Tanggal',      value: selectedEntry.tanggal },
-                      { icon: 'clock-outline',    label: 'Selesai Pukul',value: selectedEntry.selesaiPukul },
+                      { icon: 'tag-outline',        label: 'Nama Alat',     value: selectedEntry.namaAlat },
+                      { icon: 'identifier',          label: 'ID Alat',       value: selectedEntry.idAlat },
+                      { icon: 'thermometer-high',    label: 'Suhu',          value: `${selectedEntry.suhu}°C`,       iconColor: COLORS.fire },
+                      { icon: 'gauge',               label: 'Tekanan',       value: `${selectedEntry.tekanan} bar`,  iconColor: COLORS.accent },
+                      { icon: 'timer-outline',       label: 'Durasi',        value: selectedEntry.durasi },
+                      { icon: 'calendar-outline',    label: 'Tanggal',       value: selectedEntry.tanggal },
+                      { icon: 'clock-outline',       label: 'Selesai Pukul', value: selectedEntry.selesaiPukul },
+                      { icon: 'shield-check-outline',label: 'Status',        value: selectedEntry.status,
+                        valueColor: selectedEntry.status === 'Berhasil' ? COLORS.green : COLORS.danger },
                     ].map((row, i, arr) => (
                       <React.Fragment key={row.label}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <MaterialCommunityIcons name={row.icon as any} size={14} color={row.color ?? COLORS.muted} />
+                            <MaterialCommunityIcons name={row.icon as any} size={14} color={row.iconColor ?? COLORS.muted} />
                             <Text style={{ color: COLORS.muted, fontSize: 13 }}>{row.label}</Text>
                           </View>
-                          <Text style={{ color: COLORS.white, fontSize: 13, fontWeight: '700' }}>{row.value}</Text>
+                          <Text style={{ color: row.valueColor ?? COLORS.white, fontSize: 13, fontWeight: '700' }}>
+                            {row.value}
+                          </Text>
                         </View>
                         {i < arr.length - 1 && <View style={{ height: 1, backgroundColor: COLORS.border }} />}
                       </React.Fragment>
@@ -1001,7 +1100,7 @@ export default function ProcessScreen({ route, navigation }: Props) {
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <MaterialCommunityIcons name="note-text-outline" size={15} color={COLORS.gold} />
-                        <Text style={{ color: COLORS.white, fontSize: 13, fontWeight: '700' }}>Catatan Riset</Text>
+                        <Text style={{ color: COLORS.white, fontSize: 13, fontWeight: '700' }}>Catatan</Text>
                       </View>
                       {!editingNotes && (
                         <TouchableOpacity
@@ -1039,7 +1138,7 @@ export default function ProcessScreen({ route, navigation }: Props) {
                           }}
                           value={notesText}
                           onChangeText={setNotesText}
-                          placeholder="Tulis catatan riset, observasi, atau hasil pengamatan..."
+                          placeholder="Tulis catatan, observasi, atau hasil pengamatan..."
                           placeholderTextColor={COLORS.muted}
                           multiline
                           autoFocus
@@ -1049,10 +1148,12 @@ export default function ProcessScreen({ route, navigation }: Props) {
                           <TouchableOpacity
                             style={{
                               flex: 1, paddingVertical: 12, borderRadius: 10,
-                              borderWidth: 1, borderColor: COLORS.border,
-                              alignItems: 'center',
+                              borderWidth: 1, borderColor: COLORS.border, alignItems: 'center',
                             }}
-                            onPress={() => { setEditingNotes(false); setNotesText(selectedEntry.notes ?? ''); }}
+                            onPress={() => {
+                              setEditingNotes(false);
+                              setNotesText(selectedEntry.notes ?? '');
+                            }}
                           >
                             <Text style={{ color: COLORS.muted, fontSize: 13, fontWeight: '700' }}>Batal</Text>
                           </TouchableOpacity>
@@ -1068,7 +1169,11 @@ export default function ProcessScreen({ route, navigation }: Props) {
                         </View>
                       </>
                     ) : (selectedEntry.notes ?? '').trim().length > 0 ? (
-                      <Text style={{ color: COLORS.white, fontSize: 14, lineHeight: 22, backgroundColor: '#141E2E', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: COLORS.border }}>
+                      <Text style={{
+                        color: COLORS.white, fontSize: 14, lineHeight: 22,
+                        backgroundColor: '#141E2E', borderRadius: 10,
+                        padding: 12, borderWidth: 1, borderColor: COLORS.border,
+                      }}>
                         {selectedEntry.notes}
                       </Text>
                     ) : (
@@ -1082,7 +1187,7 @@ export default function ProcessScreen({ route, navigation }: Props) {
                         <MaterialCommunityIcons name="plus-circle-outline" size={22} color={COLORS.muted} />
                         <Text style={{ color: COLORS.muted, fontSize: 13 }}>Ketuk untuk menambah catatan</Text>
                         <Text style={{ color: COLORS.dim, fontSize: 11, textAlign: 'center' }}>
-                          Catat observasi, hasil pengamatan, atau catatan riset lainnya
+                          Catat observasi, hasil pengamatan, atau catatan lainnya
                         </Text>
                       </TouchableOpacity>
                     )}
@@ -1104,28 +1209,37 @@ export default function ProcessScreen({ route, navigation }: Props) {
     );
   }
 
->>>>>>> Stashed changes
-  // ── MAIN RENDER
+  // ─────────────────────────────────────────────────────
+  // Main render
+  // ─────────────────────────────────────────────────────
   return (
     <SafeAreaView style={sharedStyles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
       {renderTopBar()}
       {renderSteps()}
-      <View style={[sharedStyles.flex1, phase === 'set' ? { width: '100%', paddingHorizontal: 20 } : sharedStyles.center]}>
+      <View style={[
+        sharedStyles.flex1,
+        phase === 'set'
+          ? { width: '100%', paddingHorizontal: 20 }
+          : sharedStyles.center,
+      ]}>
         {phase === 'set'       && renderSet()}
         {phase === 'countdown' && renderCountdown()}
         {phase === 'ignition'  && renderIgnition()}
         {phase === 'running'   && renderRunning()}
         {phase === 'finish'    && renderFinish()}
       </View>
+
       {phase === 'running' && (
         <View style={bottomStyles.container}>
-          <TouchableOpacity style={bottomStyles.stopBtn} onPress={goBack}>
+          <TouchableOpacity style={bottomStyles.stopBtn} onPress={handleStop}>
             <MaterialCommunityIcons name="stop-circle-outline" size={20} color={COLORS.danger} />
             <Text style={bottomStyles.stopBtnText}>Hentikan Proses</Text>
           </TouchableOpacity>
         </View>
       )}
+
+      {renderHistoryModal()}
     </SafeAreaView>
   );
 }

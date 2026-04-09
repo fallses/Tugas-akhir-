@@ -32,6 +32,9 @@ const shared = StyleSheet.create({
   },
 });
 
+// ─────────────────────────────────────────────────────────
+// Top bar
+// ─────────────────────────────────────────────────────────
 export const topBarStyles = StyleSheet.create({
   container: {
     flexDirection: 'row',
@@ -68,6 +71,7 @@ export const topBarStyles = StyleSheet.create({
     marginTop: 2,
     letterSpacing: 0.5,
   },
+  // Live / Done / Ready badge (non-SET phases)
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -89,8 +93,29 @@ export const topBarStyles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1.5,
   },
+  // History button (SET phase only)
+  historyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    gap: 5,
+  },
+  historyBtnText: {
+    color: COLORS.muted,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
 });
 
+// ─────────────────────────────────────────────────────────
+// Step indicator
+// ─────────────────────────────────────────────────────────
 export const stepStyles = StyleSheet.create({
   container: {
     flexDirection: 'row',
@@ -121,14 +146,16 @@ export const stepStyles = StyleSheet.create({
   },
 });
 
+// ─────────────────────────────────────────────────────────
+// SET phase
+// ─────────────────────────────────────────────────────────
 export const setStyles = StyleSheet.create({
-  // ── Scroll wrapper
   scrollContent: {
     paddingBottom: 32,
     paddingTop: 4,
   },
 
-  // ── Monitor card (realtime)
+  // Monitor card
   monitorCard: {
     backgroundColor: COLORS.surface,
     borderRadius: 16,
@@ -191,7 +218,7 @@ export const setStyles = StyleSheet.create({
     marginHorizontal: 8,
   },
 
-  // ── Section label
+  // Section label
   sectionLabel: {
     color: COLORS.muted,
     fontSize: 10,
@@ -202,7 +229,7 @@ export const setStyles = StyleSheet.create({
     marginTop: 4,
   },
 
-  // ── Preset buttons
+  // Preset row
   presetRow: {
     flexDirection: 'row',
     gap: 8,
@@ -242,7 +269,7 @@ export const setStyles = StyleSheet.create({
     opacity: 0.6,
   },
 
-  // ── Parameter card
+  // Parameter card
   paramCard: {
     backgroundColor: COLORS.surface,
     borderRadius: 16,
@@ -303,7 +330,7 @@ export const setStyles = StyleSheet.create({
     marginHorizontal: 16,
   },
 
-  // ── Start button
+  // Start button
   startBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -320,7 +347,7 @@ export const setStyles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // ── Style lama (dipertahankan untuk kompatibilitas jika masih dipakai)
+  // Legacy styles kept for compatibility
   wrapper: {
     flex: 1,
     alignItems: 'center',
@@ -381,6 +408,9 @@ export const setStyles = StyleSheet.create({
   },
 });
 
+// ─────────────────────────────────────────────────────────
+// Countdown phase
+// ─────────────────────────────────────────────────────────
 export const countStyles = StyleSheet.create({
   wrapper: {
     flex: 1,
@@ -430,6 +460,9 @@ export const countStyles = StyleSheet.create({
   },
 });
 
+// ─────────────────────────────────────────────────────────
+// Ignition phase
+// ─────────────────────────────────────────────────────────
 export const ignitionStyles = StyleSheet.create({
   wrapper: {
     flex: 1,
@@ -471,6 +504,8 @@ export const ignitionStyles = StyleSheet.create({
     fontSize: 13,
     letterSpacing: 0.5,
     marginBottom: 32,
+    textAlign: 'center',
+    paddingHorizontal: 32,
   },
   barTrack: {
     width: 220,
@@ -489,9 +524,13 @@ export const ignitionStyles = StyleSheet.create({
     color: COLORS.muted,
     fontSize: 11,
     letterSpacing: 1,
+    textAlign: 'center',
   },
 });
 
+// ─────────────────────────────────────────────────────────
+// Running phase
+// ─────────────────────────────────────────────────────────
 export const runningStyles = StyleSheet.create({
   wrapper: {
     flex: 1,
@@ -558,25 +597,37 @@ export const runningStyles = StyleSheet.create({
   },
   progressTrack: {
     width: '100%',
-    height: 5,
+    height: 6,
     backgroundColor: COLORS.dim,
     borderRadius: 3,
     overflow: 'hidden',
     marginTop: 20,
   },
   progressFill: {
-    height: 5,
+    height: 6,
     backgroundColor: COLORS.green,
     borderRadius: 3,
   },
+  // Large percentage display
+  progressPct: {
+    fontSize: 42,
+    fontWeight: '900',
+    color: COLORS.green,
+    letterSpacing: -1,
+    marginTop: 10,
+    lineHeight: 46,
+  },
   progressLabel: {
     color: COLORS.muted,
-    fontSize: 11,
-    marginTop: 6,
+    fontSize: 13,
+    marginTop: 2,
     letterSpacing: 0.5,
   },
 });
 
+// ─────────────────────────────────────────────────────────
+// Finish phase
+// ─────────────────────────────────────────────────────────
 export const finishStyles = StyleSheet.create({
   wrapper: {
     flex: 1,
@@ -618,7 +669,7 @@ export const finishStyles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     gap: 12,
-    marginBottom: 32,
+    marginBottom: 28,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -642,11 +693,13 @@ export const finishStyles = StyleSheet.create({
   doneBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: COLORS.gold,
     borderRadius: 14,
     paddingHorizontal: 40,
     paddingVertical: 16,
     gap: 10,
+    width: '100%',
   },
   doneBtnText: {
     color: COLORS.bg,
@@ -656,6 +709,9 @@ export const finishStyles = StyleSheet.create({
   },
 });
 
+// ─────────────────────────────────────────────────────────
+// Bottom bar (stop button)
+// ─────────────────────────────────────────────────────────
 export const bottomStyles = StyleSheet.create({
   container: {
     paddingHorizontal: 24,
