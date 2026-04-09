@@ -94,10 +94,7 @@ export const topBarStyles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1.5,
   },
-<<<<<<< aplikasi3
   // History button (SET phase only)
-=======
->>>>>>> main
   historyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
