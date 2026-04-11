@@ -72,7 +72,6 @@ export const topBarStyles = StyleSheet.create({
     marginTop: 2,
     letterSpacing: 0.5,
   },
-  // Live / Done / Ready badge (non-SET phases)
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -94,7 +93,6 @@ export const topBarStyles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1.5,
   },
-  // History button (SET phase only)
   historyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -302,18 +300,7 @@ export const setStyles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
-  // Dipertahankan untuk kompatibilitas (tidak dipakai di durasi)
-  paramStepBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: COLORS.dim,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // ── Input lama (kompatibilitas)
+  // paramStepBtn dihapus — tidak ada lagi tombol plus/minus
   paramInput: {
     color: COLORS.white,
     fontSize: 15,
@@ -623,7 +610,6 @@ export const runningStyles = StyleSheet.create({
     backgroundColor: COLORS.green,
     borderRadius: 3,
   },
-  // Large percentage display
   progressPct: {
     fontSize: 42,
     fontWeight: '900',
@@ -647,8 +633,7 @@ export const finishStyles = StyleSheet.create({
   wrapper: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 28,
+    width: '100%',
   },
   checkRing: {
     width: 120,
@@ -711,10 +696,10 @@ export const finishStyles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: COLORS.gold,
     borderRadius: 14,
-    paddingHorizontal: 40,
     paddingVertical: 16,
     gap: 10,
     width: '100%',
+    marginBottom: 10,
   },
   doneBtnText: {
     color: COLORS.bg,
@@ -725,18 +710,19 @@ export const finishStyles = StyleSheet.create({
   secondaryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 14,
-    paddingHorizontal: 40,
-    paddingVertical: 14,
+    paddingVertical: 16,
     gap: 10,
+    width: '100%',
   },
   secondaryBtnText: {
     color: COLORS.muted,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
 });
 
@@ -767,29 +753,39 @@ export const bottomStyles = StyleSheet.create({
   },
 });
 
+// ─────────────────────────────────────────────────────────
+// History modal
+// ─────────────────────────────────────────────────────────
 export const historyStyles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.65)',
     justifyContent: 'flex-end',
   },
   sheet: {
     backgroundColor: COLORS.bg,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '80%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '85%',
+    borderTopWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    marginBottom: 12,
   },
   headerTitle: {
     color: COLORS.white,
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   empty: {
     alignItems: 'center',
@@ -802,7 +798,7 @@ export const historyStyles = StyleSheet.create({
   },
   card: {
     backgroundColor: COLORS.surface,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
@@ -814,30 +810,31 @@ export const historyStyles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 10,
   },
-  cardLeft: { flex: 1 },
+  cardLeft: {
+    gap: 2,
+  },
   cardAlat: {
     color: COLORS.white,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   cardId: {
     color: COLORS.muted,
     fontSize: 11,
-    marginTop: 2,
   },
   statusBadge: {
     borderWidth: 1,
-    borderRadius: 6,
+    borderRadius: 8,
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 3,
   },
   statusText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   cardDetails: {
     flexDirection: 'row',
-    gap: 16,
+    gap: 14,
     marginBottom: 8,
   },
   detailItem: {
@@ -852,6 +849,7 @@ export const historyStyles = StyleSheet.create({
   cardDate: {
     color: COLORS.dim,
     fontSize: 11,
+    marginTop: 4,
   },
 });
 
