@@ -144,8 +144,6 @@ export default function ProcessScreen({ route, navigation }: Props) {
     const p = PRESETS[index];
     setInputJam(p.jam.toString());
     setInputMenit(p.menit.toString());
-    setInputSuhu(p.suhu.toString());
-    setInputTekanan(p.tekanan.toString());
   }
 
   function handleMulaiProses() {
@@ -388,8 +386,8 @@ export default function ProcessScreen({ route, navigation }: Props) {
   }
 
   function renderSet() {
-    const suhuTarget    = parseFloat(inputSuhu)    || 121;
-    const tekananTarget = parseFloat(inputTekanan) || 1.2;
+    const suhuTarget    = 121;
+    const tekananTarget = 1.2;
     const suhuPct       = Math.min((monitorSuhu / suhuTarget) * 100, 100);
     const tekananPct    = Math.min((monitorTekanan / tekananTarget) * 100, 100);
 
@@ -623,7 +621,6 @@ export default function ProcessScreen({ route, navigation }: Props) {
               <Text style={setStyles.paramUnit}>bar</Text>
             </View>
           </View>
-
         </View>
 
         <TouchableOpacity style={setStyles.startBtn} onPress={handleMulaiProses}>

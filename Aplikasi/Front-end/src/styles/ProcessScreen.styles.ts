@@ -16,6 +16,7 @@ export const COLORS = {
   white:      '#F0F4FF',
   muted:      '#4A5E78',
   danger:     '#FF4455',
+  text:       '#F0F4FF',
 };
 
 const shared = StyleSheet.create({
@@ -308,10 +309,21 @@ export const setStyles = StyleSheet.create({
     textAlign: 'center',
     padding: 0,
   },
+  // ── Input ketik langsung — bersih, rata kanan, besar
+  paramInputClean: {
+    color: COLORS.white,
+    fontSize: 24,
+    fontWeight: '800',
+    textAlign: 'right',
+    minWidth: 52,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+  },
   paramUnit: {
     color: COLORS.muted,
-    fontSize: 11,
+    fontSize: 13,
     letterSpacing: 0.3,
+    minWidth: 36,
   },
   paramDivider: {
     height: 1,
@@ -591,6 +603,7 @@ export const runningStyles = StyleSheet.create({
     borderRadius: 3,
     overflow: 'hidden',
     marginTop: 20,
+    marginBottom: 0,
   },
   progressFill: {
     height: 6,
