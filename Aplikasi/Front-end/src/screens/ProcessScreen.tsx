@@ -25,6 +25,8 @@ import sharedStyles, {
   historyStyles,
 } from '../styles/ProcessScreen.styles';
 
+import { apiPostSterilisasiSet, apiGetSensorLast } from '../routes/api';
+
 type Phase = 'set' | 'countdown' | 'ignition' | 'running' | 'finish';
 
 interface HistoryEntry {
@@ -51,19 +53,19 @@ interface Props {
 }
 
 const PHASES: { key: Phase; label: string; color: string }[] = [
-  { key: 'set',       label: 'SET',     color: COLORS.accent },
-  { key: 'countdown', label: 'HITUNG',  color: COLORS.accent },
-  { key: 'ignition',  label: 'NYALA',   color: COLORS.fire   },
-  { key: 'running',   label: 'STERIL',  color: COLORS.green  },
-  { key: 'finish',    label: 'SELESAI', color: COLORS.gold   },
+  { key: 'set', label: 'SET', color: COLORS.accent },
+  { key: 'countdown', label: 'HITUNG', color: COLORS.accent },
+  { key: 'ignition', label: 'NYALA', color: COLORS.fire },
+  { key: 'running', label: 'STERIL', color: COLORS.green },
+  { key: 'finish', label: 'SELESAI', color: COLORS.gold },
 ];
 
 const IGNITION_SESSION_MS = 3000;
 const MAX_IGNITION_SESSIONS = 3;
 
 const PRESETS = [
-  { label: 'Cepat',    jam: 0, menit: 15, suhu: 121, tekanan: 1.0 },
-  { label: 'Standar',  jam: 0, menit: 20, suhu: 121, tekanan: 1.2 },
+  { label: 'Cepat', jam: 0, menit: 15, suhu: 121, tekanan: 1.0 },
+  { label: 'Standar', jam: 0, menit: 20, suhu: 121, tekanan: 1.2 },
   { label: 'Intensif', jam: 0, menit: 30, suhu: 134, tekanan: 2.0 },
 ];
 
@@ -73,49 +75,50 @@ let globalHistory: HistoryEntry[] = [];
 export default function ProcessScreen({ route, navigation }: Props) {
   const { namaAlat, idAlat } = route.params;
 
-  const [phase, setPhase]                   = useState<Phase>('set');
-  const [countValue, setCountValue]         = useState(3);
+  const [phase, setPhase] = useState<Phase>('set');
+  const [countValue, setCountValue] = useState(3);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [finishedAt, setFinishedAt]         = useState('');
-  const [finishStatus, setFinishStatus]     = useState<'Berhasil' | 'Dihentikan'>('Berhasil');
-  const [showHistory, setShowHistory]       = useState(false);
-  const [history, setHistory]               = useState<HistoryEntry[]>(globalHistory);
+  const [finishedAt, setFinishedAt] = useState('');
+  const [finishStatus, setFinishStatus] = useState<'Berhasil' | 'Dihentikan'>('Berhasil');
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState<HistoryEntry[]>(globalHistory);
 
-  const [selectedEntry, setSelectedEntry]   = useState<HistoryEntry | null>(null);
-  const [showDetail, setShowDetail]         = useState(false);
-  const [editingNotes, setEditingNotes]     = useState(false);
-  const [notesText, setNotesText]           = useState('');
+  const [selectedEntry, setSelectedEntry] = useState<HistoryEntry | null>(null);
+  const [showDetail, setShowDetail] = useState(false);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesText, setNotesText] = useState('');
 
   const [ignitionSession, setIgnitionSession] = useState(1);
-  const [ignitionError, setIgnitionError]     = useState('');
+  const [ignitionError, setIgnitionError] = useState('');
 
   const [selectedPreset, setSelectedPreset] = useState(1);
 
   // ── INPUT STATES — semua full ketik, tanpa plus/minus
-  const [inputJam, setInputJam]         = useState('0');
-  const [inputMenit, setInputMenit]     = useState('20');
-  const [inputSuhu, setInputSuhu]       = useState('121');
+  const [inputJam, setInputJam] = useState('0');
+  const [inputMenit, setInputMenit] = useState('20');
+  const [inputSuhu, setInputSuhu] = useState('121');
   const [inputTekanan, setInputTekanan] = useState('1.2');
-  const [sterilDetik, setSterilDetik]   = useState(20 * 60);
+  const [sterilDetik, setSterilDetik] = useState(20 * 60);
 
-  const [monitorSuhu, setMonitorSuhu]       = useState(28);
+  const [monitorSuhu, setMonitorSuhu] = useState(28);
   const [monitorTekanan, setMonitorTekanan] = useState(1.0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const elapsedRef = useRef(0);
   useEffect(() => { elapsedRef.current = elapsedSeconds; }, [elapsedSeconds]);
 
-  const numberScale    = useRef(new Animated.Value(1)).current;
-  const numberOpacity  = useRef(new Animated.Value(1)).current;
-  const ringScale      = useRef(new Animated.Value(0.8)).current;
-  const ringOpacity    = useRef(new Animated.Value(0)).current;
+  const numberScale = useRef(new Animated.Value(1)).current;
+  const numberOpacity = useRef(new Animated.Value(1)).current;
+  const ringScale = useRef(new Animated.Value(0.8)).current;
+  const ringOpacity = useRef(new Animated.Value(0)).current;
   const ringOuterScale = useRef(new Animated.Value(0.8)).current;
-  const mulaiOpacity   = useRef(new Animated.Value(0)).current;
-  const mulaiScale     = useRef(new Animated.Value(0.5)).current;
-  const pulseAnim      = useRef(new Animated.Value(1)).current;
-  const ignitionBar    = useRef(new Animated.Value(0)).current;
-  const ignitionFlame  = useRef(new Animated.Value(1)).current;
-  const fadeIn         = useRef(new Animated.Value(1)).current;
-  const checkScale     = useRef(new Animated.Value(0)).current;
+  const mulaiOpacity = useRef(new Animated.Value(0)).current;
+  const mulaiScale = useRef(new Animated.Value(0.5)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const ignitionBar = useRef(new Animated.Value(0)).current;
+  const ignitionFlame = useRef(new Animated.Value(1)).current;
+  const fadeIn = useRef(new Animated.Value(1)).current;
+  const checkScale = useRef(new Animated.Value(0)).current;
 
   const enterFade = useCallback(() => {
     fadeIn.setValue(0);
@@ -123,17 +126,36 @@ export default function ProcessScreen({ route, navigation }: Props) {
   }, [fadeIn]);
 
   // Monitoring simulation in 'set' phase
+  // Monitoring realtime dari backend (polling setiap 2 detik)
   useEffect(() => {
     if (phase !== 'set') return;
+
+    // Langsung fetch sekali saat masuk fase set
+    apiGetSensorLast()
+      .then(data => {
+        if (data) {
+          setMonitorSuhu(data.suhu);
+          setMonitorTekanan(data.tekanan);
+        }
+      })
+      .catch(() => { }); // Gagal fetch → biarkan nilai sebelumnya
+
     const interval = setInterval(() => {
-      setMonitorSuhu(prev => parseFloat(Math.max(26, Math.min(32, prev + (Math.random() - 0.5) * 0.4)).toFixed(1)));
-      setMonitorTekanan(prev => parseFloat(Math.max(0.95, Math.min(1.05, prev + (Math.random() - 0.5) * 0.02)).toFixed(2)));
-    }, 1500);
+      apiGetSensorLast()
+        .then(data => {
+          if (data) {
+            setMonitorSuhu(data.suhu);
+            setMonitorTekanan(data.tekanan);
+          }
+        })
+        .catch(() => { }); // Gagal fetch → biarkan nilai sebelumnya
+    }, 2000);
+
     return () => clearInterval(interval);
   }, [phase]);
 
   function totalDetik(jam: string, menit: string): number {
-    const j = parseInt(jam, 10)   || 0;
+    const j = parseInt(jam, 10) || 0;
     const m = parseInt(menit, 10) || 0;
     const total = j * 3600 + m * 60;
     return total > 0 ? total : 60;
@@ -146,11 +168,38 @@ export default function ProcessScreen({ route, navigation }: Props) {
     setInputMenit(p.menit.toString());
   }
 
-  function handleMulaiProses() {
-    setSterilDetik(totalDetik(inputJam, inputMenit));
-    setIgnitionSession(1);
+  async function handleMulaiProses() {
+    if (isSubmitting) return; // Cegah double tap
+    setIsSubmitting(true);
     setIgnitionError('');
-    setPhase('countdown');
+
+    const durasiDetik = totalDetik(inputJam, inputMenit);
+
+    try {
+      // Kirim ke backend → backend publish MQTT ke alat & simpan DB
+      await apiPostSterilisasiSet({
+        suhu: parseFloat(inputSuhu),
+        tekanan: parseFloat(inputTekanan),
+        waktu: durasiDetik,
+        device: idAlat,
+        namaAlat,
+      });
+
+      // Berhasil → lanjut ke countdown seperti biasa
+      setSterilDetik(durasiDetik);
+      setIgnitionSession(1);
+      setPhase('countdown');
+
+    } catch (error: any) {
+      console.log("❌ ERROR DETAIL:", error);
+      console.log("❌ ERROR MESSAGE:", error?.message);
+
+      setIgnitionError(
+        error.message ?? 'Gagal mengirim perintah. Cek koneksi jaringan.'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   function saveHistory(status: 'Berhasil' | 'Dihentikan', durasiDetik: number) {
@@ -207,9 +256,9 @@ export default function ProcessScreen({ route, navigation }: Props) {
     ringOpacity.setValue(0.9);
     ringOuterScale.setValue(0.5);
     Animated.parallel([
-      Animated.timing(numberScale,    { toValue: 1,   duration: 700,  useNativeDriver: true }),
-      Animated.timing(ringScale,      { toValue: 1.5, duration: 900,  useNativeDriver: true }),
-      Animated.timing(ringOpacity,    { toValue: 0,   duration: 900,  useNativeDriver: true }),
+      Animated.timing(numberScale, { toValue: 1, duration: 700, useNativeDriver: true }),
+      Animated.timing(ringScale, { toValue: 1.5, duration: 900, useNativeDriver: true }),
+      Animated.timing(ringOpacity, { toValue: 0, duration: 900, useNativeDriver: true }),
       Animated.timing(ringOuterScale, { toValue: 1.8, duration: 1100, useNativeDriver: true }),
     ]).start();
   }
@@ -219,7 +268,7 @@ export default function ProcessScreen({ route, navigation }: Props) {
     Animated.sequence([
       Animated.delay(100),
       Animated.parallel([
-        Animated.spring(mulaiScale,   { toValue: 1, useNativeDriver: true, tension: 60, friction: 5 }),
+        Animated.spring(mulaiScale, { toValue: 1, useNativeDriver: true, tension: 60, friction: 5 }),
         Animated.timing(mulaiOpacity, { toValue: 1, duration: 350, useNativeDriver: true }),
       ]),
     ]).start(() => setTimeout(() => setPhase('ignition'), 800));
@@ -235,7 +284,7 @@ export default function ProcessScreen({ route, navigation }: Props) {
 
     const flicker = Animated.loop(
       Animated.sequence([
-        Animated.timing(ignitionFlame, { toValue: 1.2,  duration: 200, useNativeDriver: true }),
+        Animated.timing(ignitionFlame, { toValue: 1.2, duration: 200, useNativeDriver: true }),
         Animated.timing(ignitionFlame, { toValue: 0.85, duration: 200, useNativeDriver: true }),
       ])
     );
@@ -271,7 +320,7 @@ export default function ProcessScreen({ route, navigation }: Props) {
     const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 1.15, duration: 800, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1,    duration: 800, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
       ])
     );
     pulse.start();
@@ -317,10 +366,10 @@ export default function ProcessScreen({ route, navigation }: Props) {
   }
 
   function formatDurasiLabel(jam: string, menit: string) {
-    const j = parseInt(jam, 10)   || 0;
+    const j = parseInt(jam, 10) || 0;
     const m = parseInt(menit, 10) || 0;
     if (j > 0 && m > 0) return `${j}j ${m}m`;
-    if (j > 0)          return `${j} jam`;
+    if (j > 0) return `${j} jam`;
     return `${m} menit`;
   }
 
@@ -367,8 +416,8 @@ export default function ProcessScreen({ route, navigation }: Props) {
       <View style={stepStyles.container}>
         {PHASES.map((p, i) => {
           const isActive = i === currentIndex;
-          const isDone   = i < currentIndex;
-          const color    = isActive ? p.color : isDone ? COLORS.muted : COLORS.dim;
+          const isDone = i < currentIndex;
+          const color = isActive ? p.color : isDone ? COLORS.muted : COLORS.dim;
           return (
             <React.Fragment key={p.key}>
               {i > 0 && (
@@ -386,10 +435,10 @@ export default function ProcessScreen({ route, navigation }: Props) {
   }
 
   function renderSet() {
-    const suhuTarget    = 121;
+    const suhuTarget = 121;
     const tekananTarget = 1.2;
-    const suhuPct       = Math.min((monitorSuhu / suhuTarget) * 100, 100);
-    const tekananPct    = Math.min((monitorTekanan / tekananTarget) * 100, 100);
+    const suhuPct = Math.min((monitorSuhu / suhuTarget) * 100, 100);
+    const tekananPct = Math.min((monitorTekanan / tekananTarget) * 100, 100);
 
     return (
       <ScrollView
@@ -677,8 +726,8 @@ export default function ProcessScreen({ route, navigation }: Props) {
 
   function renderRunning() {
     const remaining = elapsedSeconds;
-    const progress  = Math.min(1 - remaining / sterilDetik, 1);
-    const pct       = Math.round(progress * 100);
+    const progress = Math.min(1 - remaining / sterilDetik, 1);
+    const pct = Math.round(progress * 100);
 
     return (
       <Animated.View style={[runningStyles.wrapper, { opacity: fadeIn }]}>
@@ -954,11 +1003,11 @@ export default function ProcessScreen({ route, navigation }: Props) {
                       Detail Proses
                     </Text>
                     {[
-                      { icon: 'thermometer-high', label: 'Suhu',          value: `${selectedEntry.suhu}°C`,      color: COLORS.fire },
-                      { icon: 'gauge',            label: 'Tekanan',       value: `${selectedEntry.tekanan} bar`, color: COLORS.accent },
-                      { icon: 'timer-outline',    label: 'Durasi',        value: selectedEntry.durasi },
-                      { icon: 'calendar-outline', label: 'Tanggal',       value: selectedEntry.tanggal },
-                      { icon: 'clock-outline',    label: 'Selesai Pukul', value: selectedEntry.selesaiPukul },
+                      { icon: 'thermometer-high', label: 'Suhu', value: `${selectedEntry.suhu}°C`, color: COLORS.fire },
+                      { icon: 'gauge', label: 'Tekanan', value: `${selectedEntry.tekanan} bar`, color: COLORS.accent },
+                      { icon: 'timer-outline', label: 'Durasi', value: selectedEntry.durasi },
+                      { icon: 'calendar-outline', label: 'Tanggal', value: selectedEntry.tanggal },
+                      { icon: 'clock-outline', label: 'Selesai Pukul', value: selectedEntry.selesaiPukul },
                     ].map((row, i, arr) => (
                       <React.Fragment key={row.label}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10 }}>
@@ -1090,11 +1139,11 @@ export default function ProcessScreen({ route, navigation }: Props) {
       {renderTopBar()}
       {renderSteps()}
       <View style={[sharedStyles.flex1, phase === 'set' ? { width: '100%', paddingHorizontal: 20 } : sharedStyles.center]}>
-        {phase === 'set'       && renderSet()}
+        {phase === 'set' && renderSet()}
         {phase === 'countdown' && renderCountdown()}
-        {phase === 'ignition'  && renderIgnition()}
-        {phase === 'running'   && renderRunning()}
-        {phase === 'finish'    && renderFinish()}
+        {phase === 'ignition' && renderIgnition()}
+        {phase === 'running' && renderRunning()}
+        {phase === 'finish' && renderFinish()}
       </View>
 
       {phase === 'running' && (

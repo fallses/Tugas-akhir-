@@ -1,79 +1,30 @@
-const express = require("express");
-const cors = require("cors");
+require("dotenv").config();
+const express    = require("express");
+const cors       = require("cors");
+const connectDB  = require("./config/database");
 
-// import mqtt module
-const mqttClient = require("./mqtt/mqttClient");
+// Inisialisasi MQTT (auto-connect saat server start)
+require("./mqtt/mqttClient");
 
-// import database
-const connectDB = require("./config/database");
-const Data = require("./models/data");
+const sterilisasiRoutes = require("./routes/sterilisasi");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// konek ke DB
+// Koneksi MongoDB
 connectDB();
 
-// ================= API =================
+// ── Routes ──────────────────────────────────────────────────
+app.use("/sterilisasi", sterilisasiRoutes);
 
-// ambil data terakhir (dari MQTT)
-app.get("/data", (req, res) => {
-  res.json({
-    status: "success",
-    data: mqttClient.getLastData(),
-  });
-});
-
-// simpan data ke database
-app.post("/data", async (req, res) => {
-  try {
-    const { suhu, tekanan } = req.body;
-
-    const newData = new Data({
-      suhu,
-      tekanan,
-    });
-
-    await newData.save();
-
-    res.json({
-      status: "success",
-      message: "Data berhasil disimpan",
-      data: newData,
-    });
-  } catch (error) {
-    res.status(500).json({
-      status: "error",
-      message: error.message,
-    });
-  }
-});
-
-// ambil semua data dari database
-app.get("/history", async (req, res) => {
-  try {
-    const data = await Data.find().sort({ waktu: -1 });
-
-    res.json({
-      status: "success",
-      data,
-    });
-  } catch (error) {
-    res.status(500).json({
-      status: "error",
-      message: error.message,
-    });
-  }
-});
-
-// test server
+// Health check
 app.get("/", (req, res) => {
-  res.send("Backend MQTT Aktif 🚀");
+  res.json({ status: "ok", message: "Backend Sterilisasi Aktif 🚀" });
 });
 
-// ================= SERVER =================
-const PORT = 3000;
+// ── Start server ────────────────────────────────────────────
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server jalan di http://localhost:${PORT}`);
 });
