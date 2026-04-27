@@ -1,21 +1,22 @@
-const express = require("express");
-const cors = require("cors");
+require("dotenv").config();
+const express    = require("express");
+const cors       = require("cors");
+const connectDB  = require("./config/database");
 
-// import mqtt module
-const mqttClient = require("./mqtt/mqttClient");
+// Inisialisasi MQTT (auto-connect saat server start)
+require("./mqtt/mqttClient");
 
-// import database
-const connectDB = require("./config/database");
-const Data = require("./models/data");
+const sterilisasiRoutes = require("./routes/sterilisasi");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// konek ke DB
+// Koneksi MongoDB
 connectDB();
 
-// ================= API =================
+// ── Routes ──────────────────────────────────────────────────
+app.use("/sterilisasi", sterilisasiRoutes);
 
 // ambil data terakhir (dari MQTT) — action di-consume sekali lalu di-reset
 app.get("/data", (req, res) => {
@@ -72,7 +73,7 @@ app.get("/history", async (req, res) => {
 
 // test server
 app.get("/", (req, res) => {
-  res.send("Backend MQTT Aktif 🚀");
+  res.json({ status: "ok", message: "Backend Sterilisasi Aktif 🚀" });
 });
 
 // kirim perintah stop — publish ke topic sterilisasi/set

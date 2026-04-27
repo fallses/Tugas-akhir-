@@ -1,4 +1,6 @@
+require("dotenv").config();
 const mqtt = require("mqtt");
+const { Sensor } = require("../models/sterilisasi");
 
 const broker = "mqtt://broker.hivemq.com";
 const Data = require("../models/data");
@@ -15,11 +17,11 @@ const TOPICS = Object.keys(TOPIC_ACTION_MAP);
 
 const client = mqtt.connect(broker);
 
-let lastData = null;
+let lastSensor = null;
 
-// koneksi MQTT
+// ── Koneksi ──────────────────────────────────────────────────
 client.on("connect", () => {
-  console.log("Terhubung ke MQTT broker");
+  console.log("MQTT Terhubung ✅ →", broker);
 
   client.subscribe(TOPICS, (err) => {
     if (!err) {
@@ -78,7 +80,22 @@ client.on("message", async (receivedTopic, message) => {
   }
 });
 
-// export
+// ── Publish perintah SET ke alat ─────────────────────────────
+function publishSet(payload) {
+  return new Promise((resolve, reject) => {
+    const message = JSON.stringify(payload);
+    client.publish(topicSet, message, { qos: 1 }, (err) => {
+      if (err) {
+        console.error("Gagal publish MQTT ❌:", err.message);
+        reject(err);
+      } else {
+        console.log(`[MQTT → ${topicSet}]`, message);
+        resolve();
+      }
+    });
+  });
+}
+
 module.exports = {
   client,
   getLastData: () => lastData,
