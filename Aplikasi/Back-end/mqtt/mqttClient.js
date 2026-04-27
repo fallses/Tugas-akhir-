@@ -1,3 +1,4 @@
+require("dotenv").config();
 const mqtt = require("mqtt");
 const broker = "mqtt://broker.hivemq.com";
 const Data = require("../models/data");
@@ -35,7 +36,7 @@ let lastData       = null;
 let lastFinishData = null;
 
 client.on("connect", () => {
-  console.log("Terhubung ke MQTT broker");
+  console.log("MQTT Terhubung ✅ →", broker);
 
   client.subscribe(SUBSCRIBE_TOPIC, (err) => {
     if (!err) console.log("Subscribe ke topic:", SUBSCRIBE_TOPIC);
