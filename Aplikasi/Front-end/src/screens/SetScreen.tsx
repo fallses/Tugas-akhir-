@@ -33,12 +33,10 @@ import sharedStyles, {
   bottomStyles,
 } from '../styles/ProcessScreen.styles';
 import { setActiveProcessParams } from '../App';
-import { sendStart } from '../services/backendService';
 
 const PHASES = [
   { key: 'set',       label: 'SET',     color: COLORS.accent },
   { key: 'countdown', label: 'HITUNG',  color: COLORS.accent },
-  { key: 'ignition',  label: 'NYALA',   color: COLORS.fire   },
   { key: 'running',   label: 'STERIL',  color: COLORS.green  },
   { key: 'finish',    label: 'SELESAI', color: COLORS.gold   },
 ];
@@ -115,16 +113,11 @@ export default function SetScreen({ route, navigation }: Props) {
     setInputTekanan(p.tekanan.toString());
   }
 
-  async function handleMulaiProses() {
-    // Update params agar App.tsx punya data terbaru saat navigate
+  function handleMulaiProses() {
+    // Update params dulu agar App.tsx punya data terbaru saat navigate
     setActiveProcessParams(buildParams());
+    // Tampilkan loading — navigasi akan dilakukan oleh App.tsx saat dapat action
     setWaitingForBackend(true);
-    // Kirim perintah start ke backend → backend publish ke sterilisasi/set
-    try {
-      await sendStart({ suhu: inputSuhu, tekanan: inputTekanan, device: idAlat });
-    } catch {
-      // Gagal kirim — tetap tampilkan loading, user bisa batalkan
-    }
   }
 
   function handleBatalTunggu() {

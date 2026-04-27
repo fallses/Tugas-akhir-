@@ -31,7 +31,6 @@ import { sendStop } from '../services/backendService';
 const PHASES = [
   { key: 'set',       label: 'SET',     color: COLORS.accent },
   { key: 'countdown', label: 'HITUNG',  color: COLORS.accent },
-  { key: 'ignition',  label: 'NYALA',   color: COLORS.fire   },
   { key: 'running',   label: 'STERIL',  color: COLORS.green  },
   { key: 'finish',    label: 'SELESAI', color: COLORS.gold   },
 ];
@@ -118,7 +117,7 @@ export default function CountdownScreen({ route, navigation }: Props) {
   async function handleStop() {
     setStopping(true);
     try {
-      await sendStop(idAlat);
+      await sendStop();
     } catch {
       // Gagal kirim — tetap kembali ke SetScreen
     }
