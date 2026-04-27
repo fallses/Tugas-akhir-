@@ -119,13 +119,20 @@ int ignitionRetry = 0;
 const int maxRetry = 3;
 bool apiTerdeteksi = false;
 
+// ===== KONTROL SERVO 3 LEVEL =====
+#define SERVO_LEVEL_0  180   // gas tertutup
+#define SERVO_LEVEL_1  120   // gas terbuka kecil
+#define SERVO_LEVEL_2  100   // gas terbuka besar
+
 // ================= MQTT=================
 WiFiClient espClient;
 PubSubClient client(espClient);
 
 const char* mqtt_server = "192.168.1.100"; // ganti IP broker kamu
 const int mqtt_port = 1883;
-const char* mqtt_topic = "sterilisasi/data";
+const char* mqtt_topic_1 = "sterilisasi/set";
+const char* mqtt_topic_2 = "sterilisasi/running";
+const char* mqtt_topic_3 = "sterilisasi/finiash";
 
 // ================= WELCOME =================
 void welcomeAnimation() {
@@ -482,7 +489,7 @@ void setup() {
   digitalWrite(RELAY_VALVE, HIGH);
 
   gasServo.attach(SERVO_PIN);
-  gasServo.write(180); // TUTUP TOTAL
+  gasServo.write(SERVO_LEVEL_2); // TUTUP TOTAL
 
   analogReadResolution(12);
   analogSetAttenuation(ADC_11db);
@@ -782,13 +789,15 @@ void loop() {
 
     static unsigned long ignitionStart = 0;
     float suhu = max31865.temperature(RNOMINAL, RREF);
+    int servoLevel;
+    int servoAngle;
 
     if (ignitionStart == 0) {
       ignitionStart = millis();
-//      suhuAwal = suhu;
+      //      suhuAwal = suhu;
       apiTerdeteksi = false;
 
-      gasServo.write(150);             // buka gas kecil
+      gasServo.write(SERVO_LEVEL_2);             // buka gas kecil
       digitalWrite(RELAY_IGNITER, LOW); // nyalakan pemantik
     }
 
@@ -818,7 +827,7 @@ void loop() {
           ignitionStart = 0; // ulangi lagi
         } else {
           // gagal total
-          gasServo.write(180); // TUTUP TOTAL
+          gasServo.write(SERVO_LEVEL_2); // TUTUP TOTAL
           ignitionRetry = 0;
 
           display.clearDisplay();
@@ -842,25 +851,23 @@ void loop() {
     float suhu = max31865.temperature(RNOMINAL, RREF);
 
     // ===== PID SUHU =====
-    unsigned long now = millis();
-    float dt = (now - lastPID) / 1000.0;
-    lastPID = now;
-
     float error = setSuhu - suhu;
-    integral += error * dt;
 
-    if (integral > 100) integral = 100;
-    if (integral < -100) integral = -100;
+    int servoLevel;
+    int servoAngle;
 
-    float derivative = (error - previousError) / dt;
-    float output = Kp * error + Ki * integral + Kd * derivative;
-    previousError = error;
+    if (error > 5) {
+      // Suhu belum tercapai → gas besar
+      servoLevel = 2;
+      servoAngle = SERVO_LEVEL_2;
+    } else {
+      // Suhu sudah tercapai / mendekati target → gas kecil untuk pertahankan
+      servoLevel = 1;
+      servoAngle = SERVO_LEVEL_1;
+    }
 
-    if (output > 180) output = 180;
-    if (output < 0) output = 0;
-
-    int servoAngle = 180 - (output * 0.5);
     gasServo.write(servoAngle);
+
 
     // ===== SENSOR TEKANAN =====
     int adcValue = analogRead(PRESSURE_PIN);
@@ -882,14 +889,14 @@ void loop() {
       lastMillis = millis();
       sisaDetik--;
       if (sisaDetik <= 0) {
-        gasServo.write(180); // TUTUP TOTAL
+        gasServo.write(SERVO_LEVEL_0); // TUTUP TOTAL
         currentMode = MODE_FINISH;
       }
       drawRunning(suhu, pressure);
     }
 
     if (digitalRead(BTN_SELECT) == LOW) {
-      gasServo.write(180); // TUTUP TOTAL
+      gasServo.write(SERVO_LEVEL_0); // TUTUP TOTAL
       currentMode = MODE_STERIL;
       drawSterilisasi();
       delay(300);
