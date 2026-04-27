@@ -29,16 +29,16 @@ export const topBarStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 14,
+    paddingHorizontal: 16,
+    paddingTop: 28,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
   backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -46,7 +46,9 @@ export const topBarStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   titleBlock: {
+    flex: 1,
     alignItems: 'center',
+    paddingHorizontal: 12,
   },
   title: {
     color: COLORS.white,
@@ -61,7 +63,7 @@ export const topBarStyles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   spacer: {
-    width: 36,
+    width: 40,
   },
 });
 
@@ -70,17 +72,19 @@ export const topBarStyles = StyleSheet.create({
 // ─────────────────────────────────────────────────────────
 export const filterStyles = StyleSheet.create({
   container: {
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
+    maxHeight: 52,
   },
   chip: {
     paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: COLORS.border,
     backgroundColor: COLORS.surface,
+    alignSelf: 'flex-start',
   },
   chipActive: {
     borderColor: COLORS.accent,
@@ -178,8 +182,8 @@ export const listStyles = StyleSheet.create({
   // ── Card container
   card: {
     backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    marginBottom: 10,
+    borderRadius: 10,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: COLORS.border,
     overflow: 'hidden',
@@ -187,127 +191,49 @@ export const listStyles = StyleSheet.create({
   cardInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    gap: 12,
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingLeft: 18,
   },
-  // Colored left accent strip
   cardAccent: {
     position: 'absolute',
     left: 0,
     top: 0,
     bottom: 0,
     width: 3,
-    borderTopLeftRadius: 14,
-    borderBottomLeftRadius: 14,
-  },
-  iconRing: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 6,
-    flexShrink: 0,
+    borderTopLeftRadius: 10,
+    borderBottomLeftRadius: 10,
   },
   cardContent: {
     flex: 1,
-    gap: 3,
+    gap: 2,
   },
   cardDeviceName: {
     color: COLORS.white,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
-    letterSpacing: 0.2,
   },
-  cardDeviceId: {
+  cardDate: {
     color: COLORS.muted,
     fontSize: 11,
-    letterSpacing: 0.3,
-  },
-  cardMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
+    marginTop: 1,
   },
   cardTime: {
-    color: COLORS.muted,
+    color: COLORS.accent,
     fontSize: 11,
-  },
-  cardDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: COLORS.muted,
-    marginHorizontal: 2,
-  },
-  cardDurasi: {
-    color: COLORS.muted,
-    fontSize: 11,
+    fontWeight: '600',
   },
   statusBadge: {
-    alignSelf: 'flex-start',
     borderWidth: 1,
     borderRadius: 6,
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    marginTop: 5,
+    paddingVertical: 3,
+    marginLeft: 10,
   },
   statusText: {
     fontSize: 10,
     fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-
-  // ── Notes preview on card
-  notesPreview: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 5,
-  },
-  notesPreviewText: {
-    color: COLORS.gold,
-    fontSize: 11,
-    flex: 1,
-    fontStyle: 'italic',
-  },
-
-  // ── Gold dot indicator when notes exist
-  notesDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: COLORS.gold,
-  },
-
-  // ── Chevron button (right side)
-  cardChevron: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: COLORS.surface2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // ── Quick-add notes bar — shown at bottom of card when no notes yet
-  addNotesBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    backgroundColor: COLORS.surface2,
-  },
-  addNotesBarText: {
-    color: COLORS.muted,
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.3,
   },
 });
 
