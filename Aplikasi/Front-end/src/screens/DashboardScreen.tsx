@@ -110,7 +110,7 @@ export default function DashboardScreen({ navigation }: Props) {
       <TouchableOpacity
         style={styles.alatCard}
         onPress={() =>
-          navigation.navigate('ProcessScreen', {
+          navigation.navigate('SetScreen', {
             namaAlat: item.nama,
             idAlat: item.idAlat,
           })

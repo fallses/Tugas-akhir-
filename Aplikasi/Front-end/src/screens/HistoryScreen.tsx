@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,9 @@ import {
   ScrollView,
   Modal,
   TextInput,
-  Animated,
 } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   COLORS,
   topBarStyles,
@@ -19,35 +19,20 @@ import {
   filterStyles,
   detailModalStyles,
 } from '../styles/HistoryScreen.styles';
+import { globalHistory, HistoryEntry as SharedHistoryEntry } from '../types/process';
 
 // ─────────────────────────────────────────────────────────
-// Types — matches HistoryEntry from ProcessScreen
+// Types
 // ─────────────────────────────────────────────────────────
-export interface HistoryEntry {
-  id: string;
-  namaAlat: string;
-  idAlat: string;
-  suhu: string;
-  tekanan: string;
-  durasi: string;         // formatted HH:MM:SS
-  selesaiPukul: string;
-  tanggal: string;
-  status: 'Berhasil' | 'Dihentikan';
-  notes?: string;         // user-added notes, persisted locally
-}
+export type HistoryEntry = SharedHistoryEntry;
 
 type FilterType = 'Semua' | 'Berhasil' | 'Dihentikan';
 
 interface Props {
   navigation: any;
-  /**
-   * Pass the shared globalHistory array from ProcessScreen,
-   * or use a shared store / AsyncStorage in production.
-   */
   route: {
     params?: {
       history?: HistoryEntry[];
-      onUpdateNotes?: (id: string, notes: string) => void;
     };
   };
 }
@@ -77,12 +62,16 @@ function statusIcon(status: HistoryEntry['status']): string {
 // Main Component
 // ─────────────────────────────────────────────────────────
 export default function HistoryScreen({ route, navigation }: Props) {
-  const passedHistory: HistoryEntry[] = route.params?.history ?? [];
-  const onUpdateNotes = route.params?.onUpdateNotes;
-
-  // Local state — notes edits are stored here (use AsyncStorage in production)
-  const [entries, setEntries] = useState<HistoryEntry[]>(passedHistory);
+  // Selalu baca dari globalHistory agar data selalu fresh
+  const [entries, setEntries] = useState<HistoryEntry[]>([...globalHistory]);
   const [filter, setFilter]   = useState<FilterType>('Semua');
+
+  // Refresh data setiap kali screen difokuskan
+  useFocusEffect(
+    useCallback(() => {
+      setEntries([...globalHistory]);
+    }, [])
+  );
 
   // Detail modal
   const [selected, setSelected]         = useState<HistoryEntry | null>(null);
@@ -91,9 +80,6 @@ export default function HistoryScreen({ route, navigation }: Props) {
   // Notes editing
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesText, setNotesText]       = useState('');
-
-  // Animation for modal
-  const sheetAnim = useRef(new Animated.Value(0)).current;
 
   function openModal(entry: HistoryEntry) {
     setSelected(entry);
@@ -112,9 +98,10 @@ export default function HistoryScreen({ route, navigation }: Props) {
     const updated = entries.map(e =>
       e.id === selected.id ? { ...e, notes: notesText } : e
     );
+    // Update globalHistory juga agar perubahan persisten selama sesi
+    globalHistory.splice(0, globalHistory.length, ...updated);
     setEntries(updated);
     setSelected(prev => prev ? { ...prev, notes: notesText } : prev);
-    onUpdateNotes?.(selected.id, notesText);
     setEditingNotes(false);
   }
 
@@ -202,10 +189,8 @@ export default function HistoryScreen({ route, navigation }: Props) {
   }
 
   function renderCard(entry: HistoryEntry) {
-    const color    = statusColor(entry.status);
-    const icon     = statusIcon(entry.status);
-    const iconBg   = entry.status === 'Berhasil' ? COLORS.greenDim : '#2A1010';
-    const hasNotes = (entry.notes ?? '').trim().length > 0;
+    const color  = statusColor(entry.status);
+    const isOk   = entry.status === 'Berhasil';
 
     return (
       <TouchableOpacity
@@ -214,67 +199,26 @@ export default function HistoryScreen({ route, navigation }: Props) {
         onPress={() => openModal(entry)}
         activeOpacity={0.75}
       >
+        {/* Left accent strip */}
+        <View style={[listStyles.cardAccent, { backgroundColor: color }]} />
+
         <View style={listStyles.cardInner}>
-          {/* Left accent strip */}
-          <View style={[listStyles.cardAccent, { backgroundColor: color }]} />
-
-          {/* Icon */}
-          <View style={[listStyles.iconRing, { backgroundColor: iconBg, borderColor: color + '44' }]}>
-            <MaterialCommunityIcons name={icon} size={22} color={color} />
-          </View>
-
           {/* Content */}
           <View style={listStyles.cardContent}>
             <Text style={listStyles.cardDeviceName} numberOfLines={1}>{entry.namaAlat}</Text>
-            <Text style={listStyles.cardDeviceId}>{entry.idAlat}</Text>
-            <View style={listStyles.cardMeta}>
-              <MaterialCommunityIcons name="clock-outline" size={11} color={COLORS.muted} />
-              <Text style={listStyles.cardTime}>{entry.selesaiPukul}</Text>
-              <View style={listStyles.cardDot} />
-              <MaterialCommunityIcons name="timer-outline" size={11} color={COLORS.muted} />
-              <Text style={listStyles.cardDurasi}>{entry.durasi}</Text>
-            </View>
-            <View style={[listStyles.statusBadge, { borderColor: color + '66' }]}>
-              <Text style={[listStyles.statusText, { color }]}>{entry.status}</Text>
-            </View>
-
-            {/* Notes preview — shown only if notes exist */}
-            {hasNotes && (
-              <View style={listStyles.notesPreview}>
-                <MaterialCommunityIcons name="note-text-outline" size={11} color={COLORS.gold} />
-                <Text style={listStyles.notesPreviewText} numberOfLines={1}>
-                  {entry.notes}
-                </Text>
-              </View>
-            )}
+            <Text style={listStyles.cardDate}>{entry.tanggal}</Text>
+            <Text style={listStyles.cardTime}>
+              {entry.mulaiPukul} – {entry.selesaiPukul}
+            </Text>
           </View>
 
-          {/* Right side: notes indicator dot + chevron */}
-          <View style={{ alignItems: 'center', gap: 6 }}>
-            {hasNotes && (
-              <View style={listStyles.notesDot} />
-            )}
-            <View style={listStyles.cardChevron}>
-              <MaterialCommunityIcons name="chevron-right" size={18} color={COLORS.muted} />
-            </View>
+          {/* Status badge */}
+          <View style={[listStyles.statusBadge, { borderColor: color + '66' }]}>
+            <Text style={[listStyles.statusText, { color }]}>
+              {isOk ? '✓ Berhasil' : '✗ Dihentikan'}
+            </Text>
           </View>
         </View>
-
-        {/* Quick-add notes bar — shown when no notes yet */}
-        {!hasNotes && (
-          <TouchableOpacity
-            style={listStyles.addNotesBar}
-            onPress={() => {
-              openModal(entry);
-              // Auto-trigger edit mode after modal opens
-              setTimeout(() => setEditingNotes(true), 350);
-            }}
-            activeOpacity={0.7}
-          >
-            <MaterialCommunityIcons name="plus" size={12} color={COLORS.muted} />
-            <Text style={listStyles.addNotesBarText}>Tambah catatan</Text>
-          </TouchableOpacity>
-        )}
       </TouchableOpacity>
     );
   }

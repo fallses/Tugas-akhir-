@@ -2,9 +2,18 @@ require("dotenv").config();
 const mqtt = require("mqtt");
 const { Sensor } = require("../models/sterilisasi");
 
-const broker    = process.env.MQTT_BROKER     || "mqtt://broker.hivemq.com";
-const topicData = process.env.MQTT_TOPIC_DATA  || "sterilisasi/data";
-const topicSet  = process.env.MQTT_TOPIC_SET   || "sterilisasi/set";
+const broker = "mqtt://broker.hivemq.com";
+const Data = require("../models/data");
+
+// Mapping topic → action yang dikenali frontend
+const TOPIC_ACTION_MAP = {
+  "sterilisasi/set":      "set",
+  "sterilisasi/countdown": "countdown",
+  "sterilisasi/running":  "running",
+  "sterilisasi/finish":   "finish",
+};
+
+const TOPICS = Object.keys(TOPIC_ACTION_MAP);
 
 const client = mqtt.connect(broker);
 
@@ -14,48 +23,60 @@ let lastSensor = null;
 client.on("connect", () => {
   console.log("MQTT Terhubung ✅ →", broker);
 
-  // Subscribe KE DUA topic sekaligus
-  client.subscribe([topicData, topicSet], (err) => {
+  client.subscribe(TOPICS, (err) => {
     if (!err) {
-      console.log("Subscribe: sterilisasi/data ✅");
-      console.log("Subscribe: sterilisasi/set  ✅");
-    } else {
-      console.error("Gagal subscribe ❌:", err.message);
+      console.log("Subscribe ke topic:", TOPICS.join(", "));
     }
   });
 });
 
-client.on("error", (err) => {
-  console.error("MQTT Error ❌:", err.message);
-});
-
-// ── Terima pesan dari kedua topic ────────────────────────────
-client.on("message", async (topic, message) => {
+// menerima pesan
+client.on("message", async (receivedTopic, message) => {
   const raw = message.toString();
-  console.log(`[MQTT ← ${topic}]`, raw);
+  console.log(`[${receivedTopic}] Data masuk:`, raw);
 
-  // Data sensor dari alat (sterilisasi/data)
-  if (topic === topicData) {
-    try {
-      const data = JSON.parse(raw);
-      const record = await new Sensor({
-        suhu:    data.suhu,
-        tekanan: data.tekanan,
-        action:  data.action,
-        waktu:   data.waktu,
-        device:  data.Device,
-      }).save();
-      lastSensor = record;
-      console.log("Sensor disimpan ✅");
-    } catch (err) {
-      console.error("Gagal simpan sensor ❌:", err.message);
-    }
+  // Tentukan action dari nama topic
+  const action = TOPIC_ACTION_MAP[receivedTopic] ?? null;
+  if (!action) {
+    console.warn("Topic tidak dikenali:", receivedTopic);
+    return;
   }
 
-  // Konfirmasi dari alat (sterilisasi/set) — log saja dulu
-  if (topic === topicSet) {
-    console.log("Pesan di sterilisasi/set diterima:", raw);
-    // Nanti bisa ditambah logic update status sesi di DB
+  let data = {};
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    // Payload boleh kosong atau bukan JSON — action tetap diproses
+    console.warn("Payload bukan JSON, lanjut dengan data kosong");
+  }
+
+  // Waktu dari payload boleh format "HH:MM" (misal "10:30")
+  // Jika tidak ada, fallback ke jam:menit saat ini
+  const now = new Date();
+  const fallbackWaktu = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+  const waktu = data.waktu ?? fallbackWaktu;
+
+  // Simpan data terakhir — action diambil dari topic, bukan dari payload
+  lastData = {
+    suhu:    data.suhu    ?? null,
+    tekanan: data.tekanan ?? null,
+    action,
+    waktu,
+    device:  data.Device  ?? data.device ?? null,
+  };
+
+  console.log("lastData diperbarui:", lastData);
+
+  try {
+    await new Data({
+      suhu:    data.suhu,
+      tekanan: data.tekanan,
+      action,
+      waktu,
+      device:  data.Device ?? data.device,
+    }).save();
+  } catch (error) {
+    console.error("Gagal simpan ke DB:", error.message);
   }
 });
 
@@ -76,6 +97,10 @@ function publishSet(payload) {
 }
 
 module.exports = {
-  publishSet,
-  getLastSensor: () => lastSensor,
+  client,
+  getLastData: () => lastData,
+  // Reset action setelah dikonsumsi frontend — mencegah action terbaca ulang
+  consumeAction: () => {
+    if (lastData) lastData.action = null;
+  },
 };
