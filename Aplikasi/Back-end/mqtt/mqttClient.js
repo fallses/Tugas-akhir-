@@ -1,8 +1,17 @@
 const mqtt = require("mqtt");
 
 const broker = "mqtt://broker.hivemq.com";
-const topic = "sterilisasi/data";
 const Data = require("../models/data");
+
+// Mapping topic → action yang dikenali frontend
+const TOPIC_ACTION_MAP = {
+  "sterilisasi/set":      "set",
+  "sterilisasi/countdown": "countdown",
+  "sterilisasi/running":  "running",
+  "sterilisasi/finish":   "finish",
+};
+
+const TOPICS = Object.keys(TOPIC_ACTION_MAP);
 
 const client = mqtt.connect(broker);
 
@@ -12,40 +21,60 @@ let lastData = null;
 client.on("connect", () => {
   console.log("Terhubung ke MQTT broker");
 
-  client.subscribe(topic, (err) => {
+  client.subscribe(TOPICS, (err) => {
     if (!err) {
-      console.log("Subscribe ke topic:", topic);
+      console.log("Subscribe ke topic:", TOPICS.join(", "));
     }
   });
 });
 
-// menerima pesan (SATU SAJA)
-client.on("message", async (topic, message) => {
+// menerima pesan
+client.on("message", async (receivedTopic, message) => {
   const raw = message.toString();
-  console.log("Data masuk:", raw);
+  console.log(`[${receivedTopic}] Data masuk:`, raw);
 
-  // simpan raw data
+  // Tentukan action dari nama topic
+  const action = TOPIC_ACTION_MAP[receivedTopic] ?? null;
+  if (!action) {
+    console.warn("Topic tidak dikenali:", receivedTopic);
+    return;
+  }
+
+  let data = {};
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    // Payload boleh kosong atau bukan JSON — action tetap diproses
+    console.warn("Payload bukan JSON, lanjut dengan data kosong");
+  }
+
+  // Waktu dari payload boleh format "HH:MM" (misal "10:30")
+  // Jika tidak ada, fallback ke jam:menit saat ini
+  const now = new Date();
+  const fallbackWaktu = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+  const waktu = data.waktu ?? fallbackWaktu;
+
+  // Simpan data terakhir — action diambil dari topic, bukan dari payload
   lastData = {
-    topic: topic,
-    value: raw,
-    time: new Date(),
+    suhu:    data.suhu    ?? null,
+    tekanan: data.tekanan ?? null,
+    action,
+    waktu,
+    device:  data.Device  ?? data.device ?? null,
   };
 
+  console.log("lastData diperbarui:", lastData);
+
   try {
-    const data = JSON.parse(raw);
-
-    console.log("Data valid:", data);
-
     await new Data({
-      suhu: data.suhu,
+      suhu:    data.suhu,
       tekanan: data.tekanan,
-      action: data.action,
-      waktu: data.waktu,
-      device: data.Device,
+      action,
+      waktu,
+      device:  data.Device ?? data.device,
     }).save();
-
   } catch (error) {
-    console.error("JSON tidak valid ❌:", raw);
+    console.error("Gagal simpan ke DB:", error.message);
   }
 });
 
@@ -53,4 +82,8 @@ client.on("message", async (topic, message) => {
 module.exports = {
   client,
   getLastData: () => lastData,
+  // Reset action setelah dikonsumsi frontend — mencegah action terbaca ulang
+  consumeAction: () => {
+    if (lastData) lastData.action = null;
+  },
 };

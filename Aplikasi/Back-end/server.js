@@ -17,12 +17,15 @@ connectDB();
 
 // ================= API =================
 
-// ambil data terakhir (dari MQTT)
+// ambil data terakhir (dari MQTT) — action di-consume sekali lalu di-reset
 app.get("/data", (req, res) => {
+  const data = mqttClient.getLastData();
   res.json({
     status: "success",
-    data: mqttClient.getLastData(),
+    data,
   });
+  // Reset action setelah dikonsumsi agar tidak terbaca ulang
+  mqttClient.consumeAction();
 });
 
 // simpan data ke database
@@ -72,8 +75,26 @@ app.get("/", (req, res) => {
   res.send("Backend MQTT Aktif 🚀");
 });
 
+// kirim perintah stop — publish ke topic sterilisasi/set
+app.post("/stop", (req, res) => {
+  const payload = JSON.stringify({
+    action: "set",
+    waktu: (() => {
+      const now = new Date();
+      return `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+    })(),
+  });
+
+  mqttClient.client.publish("sterilisasi/set", payload, (err) => {
+    if (err) {
+      return res.status(500).json({ status: "error", message: "Gagal publish MQTT" });
+    }
+    res.json({ status: "success", message: "Perintah stop dikirim" });
+  });
+});
+
 // ================= SERVER =================
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server jalan di http://localhost:${PORT}`);
 });

@@ -8,21 +8,22 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingTop: 32,
   },
 
   // Greeting
   greetingCard: {
     backgroundColor: '#111127',
     borderRadius: 16,
-    padding: 20,
+    padding: 40,
     marginBottom: 24,
+    marginTop: 8,
     borderWidth: 0.5,
     borderColor: '#2A2A4A',
   },
   greetingTitle: {
     color: '#E0E0FF',
-    fontSize: 20,
+    fontSize: 25,
     fontWeight: '500',
   },
   greetingSubtitle: {
