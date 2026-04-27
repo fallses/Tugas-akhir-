@@ -1,100 +1,119 @@
 const express = require("express");
-const cors = require("cors");
-
-// import mqtt module
+const cors    = require("cors");
 const mqttClient = require("./mqtt/mqttClient");
-
-// import database
-const connectDB = require("./config/database");
-const Data = require("./models/data");
+const connectDB  = require("./config/database");
+const Data       = require("./models/data");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// konek ke DB
 connectDB();
 
-// ================= API =================
-
-// ambil data terakhir (dari MQTT) — action di-consume sekali lalu di-reset
+// ─────────────────────────────────────────────────────────
+// GET /data
+// Ambil data terakhir dari MQTT. Action di-consume setelah dibaca
+// agar tidak terbaca ulang oleh polling berikutnya.
+// ─────────────────────────────────────────────────────────
 app.get("/data", (req, res) => {
   const data = mqttClient.getLastData();
-  res.json({
-    status: "success",
-    data,
-  });
-  // Reset action setelah dikonsumsi agar tidak terbaca ulang
-  mqttClient.consumeAction();
-});
 
-// simpan data ke database
-app.post("/data", async (req, res) => {
-  try {
-    const { suhu, tekanan } = req.body;
-
-    const newData = new Data({
-      suhu,
-      tekanan,
-    });
-
-    await newData.save();
-
-    res.json({
-      status: "success",
-      message: "Data berhasil disimpan",
-      data: newData,
-    });
-  } catch (error) {
-    res.status(500).json({
-      status: "error",
-      message: error.message,
-    });
+  // Log untuk debug — tampilkan action yang sedang dikirim ke frontend
+  if (data?.action) {
+    console.log(`[GET /data] Mengirim action: "${data.action}" sesi:${data.sesi ?? '-'} status:${data.status ?? '-'}`);
   }
+
+  // Kirim response dulu, baru consume — pastikan frontend sudah terima
+  res.json({ status: "success", data });
+
+  // Consume setelah response terkirim
+  setImmediate(() => mqttClient.consumeAction());
 });
 
-// ambil semua data dari database
-app.get("/history", async (req, res) => {
-  try {
-    const data = await Data.find().sort({ waktu: -1 });
+// ─────────────────────────────────────────────────────────
+// POST /start
+// Frontend kirim saat user tekan "Mulai Proses".
+// Publish ke sterilisasi/set dengan action "start".
+//
+// Body: { suhu, tekanan, waktu, device }
+// ─────────────────────────────────────────────────────────
+app.post("/start", (req, res) => {
+  const { suhu, tekanan, waktu, device } = req.body;
 
-    res.json({
-      status: "success",
-      data,
-    });
-  } catch (error) {
-    res.status(500).json({
-      status: "error",
-      message: error.message,
-    });
-  }
-});
+  const now = new Date();
+  const fallbackWaktu = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
 
-// test server
-app.get("/", (req, res) => {
-  res.send("Backend MQTT Aktif 🚀");
-});
-
-// kirim perintah stop — publish ke topic sterilisasi/set
-app.post("/stop", (req, res) => {
   const payload = JSON.stringify({
-    action: "set",
-    waktu: (() => {
-      const now = new Date();
-      return `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
-    })(),
+    action:  "start",
+    suhu:    suhu    ?? null,
+    tekanan: tekanan ?? null,
+    waktu:   waktu   ?? fallbackWaktu,
+    Device:  device  ?? null,
   });
 
-  mqttClient.client.publish("sterilisasi/set", payload, (err) => {
-    if (err) {
-      return res.status(500).json({ status: "error", message: "Gagal publish MQTT" });
-    }
+  mqttClient.client.publish(mqttClient.PUBLISH_TOPIC, payload, (err) => {
+    if (err) return res.status(500).json({ status: "error", message: "Gagal publish MQTT" });
+    console.log(`[PUBLISH] ${mqttClient.PUBLISH_TOPIC}:`, payload);
+    res.json({ status: "success", message: "Perintah start dikirim" });
+  });
+});
+
+// ─────────────────────────────────────────────────────────
+// POST /stop
+// Frontend kirim saat user tekan "Hentikan/Batalkan".
+// Publish ke sterilisasi/set dengan action "stop".
+//
+// Body: { device }
+// ─────────────────────────────────────────────────────────
+app.post("/stop", (req, res) => {
+  const { device } = req.body;
+
+  const now = new Date();
+  const waktu = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+
+  const payload = JSON.stringify({
+    action: "stop",
+    waktu,
+    Device: device ?? null,
+  });
+
+  mqttClient.client.publish(mqttClient.PUBLISH_TOPIC, payload, (err) => {
+    if (err) return res.status(500).json({ status: "error", message: "Gagal publish MQTT" });
+    console.log(`[PUBLISH] ${mqttClient.PUBLISH_TOPIC}:`, payload);
     res.json({ status: "success", message: "Perintah stop dikirim" });
   });
 });
 
-// ================= SERVER =================
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server jalan di http://localhost:${PORT}`);
+// ─────────────────────────────────────────────────────────
+// GET /finish
+// Ambil data dari topik sterilisasi/finish.
+// Di-consume setelah dibaca agar tidak terbaca ulang.
+// ─────────────────────────────────────────────────────────
+app.get("/finish", (req, res) => {
+  const data = mqttClient.getLastFinishData();
+
+  if (data) {
+    console.log(`[GET /finish] Mengirim data finish: waktu:${data.waktu}`);
+  }
+
+  res.json({ status: "success", data });
+
+  setImmediate(() => mqttClient.consumeFinish());
 });
+
+// ─────────────────────────────────────────────────────────
+// GET /history — ambil semua data dari database
+// ─────────────────────────────────────────────────────────
+app.get("/history", async (req, res) => {
+  try {
+    const data = await Data.find().sort({ waktu: -1 });
+    res.json({ status: "success", data });
+  } catch (error) {
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+app.get("/", (req, res) => res.send("Backend MQTT Aktif 🚀"));
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Server jalan di http://localhost:${PORT}`));

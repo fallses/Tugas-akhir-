@@ -42,7 +42,7 @@ export const topBarStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 50,
+    paddingTop: 28,
     paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,

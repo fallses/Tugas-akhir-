@@ -10,8 +10,11 @@
  * Action yang dikenali:
  *   "countdown" → CountdownScreen
  *   "running"   → RunningScreen
- *   "finish"    → FinishScreen
+ *   "ignition"  → IgnitionScreen
  *   "set"       → SetScreen (kembali ke awal)
+ *
+ * Polling terpisah ke /finish:
+ *   sterilisasi/finish → FinishScreen
  */
 
 import React, { useEffect, useRef } from 'react';
@@ -22,11 +25,12 @@ import WelcomeScreen  from './screens/WelcomeScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import SetScreen      from './screens/SetScreen';
 import CountdownScreen from './screens/CountdownScreen';
+import IgnitionScreen from './screens/IgnitionScreen';
 import RunningScreen  from './screens/RunningScreen';
 import FinishScreen   from './screens/FinishScreen';
 import HistoryScreen  from './screens/HistoryScreen';
 
-import { fetchLastData } from './services/backendService';
+import { fetchLastData, fetchFinishData } from './services/backendService';
 import { POLL_INTERVAL_MS } from './config';
 
 const Stack = createNativeStackNavigator();
@@ -51,21 +55,23 @@ export function setActiveProcessParams(params: typeof activeProcessParams) {
 }
 
 export default function App() {
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollRef       = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollFinishRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
+    // ── Polling /data (sterilisasi/running) ──────────────────
     async function checkAction() {
       try {
         const res = await fetchLastData();
         if (res.status !== 'success' || !res.data) return;
 
-        const { action, suhu, tekanan } = res.data;
-        if (!action) return;  // null setelah di-consume backend
+        const { action, suhu, tekanan, sesi, status } = res.data;
+        if (!action) return;
 
         const nav = navigationRef.current;
-        if (!nav) return;
+        if (!nav || !nav.isReady()) return;
 
-        // Params fallback jika activeProcessParams belum di-set
+        console.log(`[App] Action diterima: "${action}"`);
         const params = activeProcessParams ?? {
           namaAlat: '-',
           idAlat:   '-',
@@ -79,46 +85,93 @@ export default function App() {
             nav.navigate('CountdownScreen', params);
             break;
           case 'running':
-            nav.navigate('RunningScreen', params);
-            break;
-          case 'finish': {
-            const now = new Date();
-            nav.navigate('FinishScreen', {
+            nav.navigate('RunningScreen', {
               ...params,
-              finishedAt: now.toLocaleTimeString('id-ID', {
-                hour: '2-digit', minute: '2-digit', second: '2-digit',
-              }),
-              status: 'Berhasil',
+              ...(suhu    != null && { inputSuhu:    suhu.toString() }),
+              ...(tekanan != null && { inputTekanan: tekanan.toString() }),
             });
             break;
-          }
           case 'set':
             nav.navigate('SetScreen', params);
             break;
           default:
+            if (action === 'ignition' && sesi != null) {
+              const ignitionParams = {
+                ...params,
+                sesi: parseInt(sesi, 10) || 1,
+                ignitionStatus: (status === 'api menyala'
+                  ? 'api menyala'
+                  : 'prosesing') as 'prosesing' | 'api menyala',
+              };
+              const currentRoute = nav.getCurrentRoute();
+              if (currentRoute?.name === 'IgnitionScreen') {
+                nav.setParams(ignitionParams);
+              } else {
+                nav.navigate('IgnitionScreen', ignitionParams);
+              }
+            }
             break;
         }
       } catch {
-        // Gagal polling — diam saja, coba lagi di interval berikutnya
+        // Gagal polling — coba lagi di interval berikutnya
       }
     }
 
-    pollRef.current = setInterval(checkAction, POLL_INTERVAL_MS);
+    // ── Polling /finish (sterilisasi/finish) ─────────────────
+    async function checkFinish() {
+      try {
+        const res = await fetchFinishData();
+        if (res.status !== 'success' || !res.data) return;
+
+        const nav = navigationRef.current;
+        if (!nav || !nav.isReady()) return;
+
+        const { suhu, tekanan, waktu } = res.data;
+        console.log('[App] Finish diterima dari sterilisasi/finish');
+
+        const params = activeProcessParams ?? {
+          namaAlat: '-',
+          idAlat:   '-',
+          sterilDetik: 20 * 60,
+          inputSuhu:   suhu?.toString()    ?? '121',
+          inputTekanan: tekanan?.toString() ?? '1.2',
+        };
+
+        const now = new Date();
+        nav.navigate('FinishScreen', {
+          ...params,
+          ...(suhu    != null && { inputSuhu:    suhu.toString() }),
+          ...(tekanan != null && { inputTekanan: tekanan.toString() }),
+          finishedAt: waktu ?? now.toLocaleTimeString('id-ID', {
+            hour: '2-digit', minute: '2-digit',
+          }),
+          status: 'Berhasil',
+        });
+      } catch {
+        // Gagal polling — coba lagi di interval berikutnya
+      }
+    }
+
+    pollRef.current       = setInterval(checkAction, POLL_INTERVAL_MS);
+    pollFinishRef.current = setInterval(checkFinish, POLL_INTERVAL_MS);
+
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
+      if (pollRef.current)       clearInterval(pollRef.current);
+      if (pollFinishRef.current) clearInterval(pollFinishRef.current);
     };
   }, []);
 
   return (
     <NavigationContainer ref={navigationRef}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Welcome"        component={WelcomeScreen} />
-        <Stack.Screen name="Dashboard"      component={DashboardScreen} />
-        <Stack.Screen name="SetScreen"      component={SetScreen} />
+        <Stack.Screen name="Welcome"         component={WelcomeScreen} />
+        <Stack.Screen name="Dashboard"       component={DashboardScreen} />
+        <Stack.Screen name="SetScreen"       component={SetScreen} />
         <Stack.Screen name="CountdownScreen" component={CountdownScreen} />
-        <Stack.Screen name="RunningScreen"  component={RunningScreen} />
-        <Stack.Screen name="FinishScreen"   component={FinishScreen} />
-        <Stack.Screen name="History"        component={HistoryScreen} />
+        <Stack.Screen name="IgnitionScreen"  component={IgnitionScreen} />
+        <Stack.Screen name="RunningScreen"   component={RunningScreen} />
+        <Stack.Screen name="FinishScreen"    component={FinishScreen} />
+        <Stack.Screen name="History"         component={HistoryScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
