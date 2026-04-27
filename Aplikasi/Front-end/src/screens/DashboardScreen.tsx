@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,14 @@ import {
   Modal,
   TextInput,
   SafeAreaView,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import styles from '../styles/DashboardScreen.styles';
+
+const STORAGE_KEY = '@daftar_alat';
 
 interface Alat {
   id: string;
@@ -35,11 +40,36 @@ function isValidIdAlat(id: string): boolean {
 
 export default function DashboardScreen({ navigation }: Props) {
   const [daftarAlat, setDaftarAlat] = useState<Alat[]>([]);
+  const [loading, setLoading]       = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [inputNama, setInputNama] = useState('');
-  const [inputId, setInputId] = useState('');
+  const [inputId, setInputId]     = useState('');
   const [namaError, setNamaError] = useState('');
-  const [idError, setIdError] = useState('');
+  const [idError, setIdError]     = useState('');
+
+  // ── Load dari AsyncStorage saat pertama kali mount
+  useEffect(() => {
+    async function loadAlat() {
+      try {
+        const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        if (raw) setDaftarAlat(JSON.parse(raw));
+      } catch {
+        // Gagal load — mulai dengan list kosong
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadAlat();
+  }, []);
+
+  // ── Simpan ke AsyncStorage setiap kali daftarAlat berubah
+  const saveAlat = useCallback(async (list: Alat[]) => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    } catch {
+      // Gagal simpan — tidak perlu crash
+    }
+  }, []);
 
   function bukaModal() {
     setInputNama('');
@@ -60,17 +90,13 @@ export default function DashboardScreen({ navigation }: Props) {
   function handleNamaChange(text: string) {
     const formatted = formatNamaAlat(text);
     setInputNama(formatted);
-    if (namaError && formatted.trim()) {
-      setNamaError('');
-    }
+    if (namaError && formatted.trim()) setNamaError('');
   }
 
   function handleIdChange(text: string) {
     const formatted = formatIdAlat(text);
     setInputId(formatted);
-    if (idError && isValidIdAlat(formatted)) {
-      setIdError('');
-    }
+    if (idError && isValidIdAlat(formatted)) setIdError('');
   }
 
   function tambahAlat() {
@@ -101,8 +127,29 @@ export default function DashboardScreen({ navigation }: Props) {
       idAlat: inputId.trim(),
     };
 
-    setDaftarAlat(prev => [...prev, alatBaru]);
+    const updated = [...daftarAlat, alatBaru];
+    setDaftarAlat(updated);
+    saveAlat(updated);
     tutupModal();
+  }
+
+  function hapusAlat(id: string, nama: string) {
+    Alert.alert(
+      'Hapus Alat',
+      `Hapus "${nama}" dari daftar?`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus',
+          style: 'destructive',
+          onPress: () => {
+            const updated = daftarAlat.filter(a => a.id !== id);
+            setDaftarAlat(updated);
+            saveAlat(updated);
+          },
+        },
+      ]
+    );
   }
 
   function renderItem({ item }: { item: Alat }) {
@@ -115,6 +162,8 @@ export default function DashboardScreen({ navigation }: Props) {
             idAlat: item.idAlat,
           })
         }
+        onLongPress={() => hapusAlat(item.id, item.nama)}
+        delayLongPress={500}
       >
         <View style={styles.alatLeft}>
           <View style={[styles.alatIcon, styles.alatIconOff]}>
@@ -125,7 +174,7 @@ export default function DashboardScreen({ navigation }: Props) {
             <Text style={styles.alatId}>ID: {item.idAlat}</Text>
           </View>
         </View>
-        <MaterialCommunityIcons name="chevron-right" size={20} color="#555580" />
+        <MaterialCommunityIcons name="chevron-right" size={20} color="#4A5E78" />
       </TouchableOpacity>
     );
   }
@@ -146,9 +195,13 @@ export default function DashboardScreen({ navigation }: Props) {
           </TouchableOpacity>
         </View>
 
-        {daftarAlat.length === 0 ? (
+        {loading ? (
           <View style={styles.emptyWrapper}>
-            <MaterialCommunityIcons name="hardware-chip-outline" size={48} color="#2A2A4A" />
+            <ActivityIndicator size="large" color="#00E5FF" />
+          </View>
+        ) : daftarAlat.length === 0 ? (
+          <View style={styles.emptyWrapper}>
+            <MaterialCommunityIcons name="hardware-chip-outline" size={48} color="#1E2D42" />
             <Text style={styles.emptyText}>Belum ada alat terdaftar.</Text>
             <Text style={styles.emptySubtext}>Tekan + untuk menambahkan alat.</Text>
           </View>
@@ -158,6 +211,11 @@ export default function DashboardScreen({ navigation }: Props) {
             keyExtractor={item => item.id}
             renderItem={renderItem}
             showsVerticalScrollIndicator={false}
+            ListFooterComponent={
+              <Text style={{ color: '#333355', fontSize: 11, textAlign: 'center', marginTop: 12 }}>
+                Tahan lama pada kartu untuk menghapus alat
+              </Text>
+            }
           />
         )}
 
