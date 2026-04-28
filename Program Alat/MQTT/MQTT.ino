@@ -2,15 +2,15 @@
 #include <PubSubClient.h>
 
 // ================= WIFI =================
-const char* ssid = "Margin Atas";
-const char* password = "Marginescape*";
+const char* ssid = "gue mah ganteng";
+const char* password = "iya bentar";
 
 // ================= MQTT =================
 const char* mqtt_server = "broker.hivemq.com";
 const int mqtt_port = 1883;
 const char* mqtt_topic_1 = "sterilisasi/set";
 const char* mqtt_topic_2 = "sterilisasi/running";
-const char* mqtt_topic_3 = "sterilisasi/finiash";
+const char* mqtt_topic_3 = "sterilisasi/finish";
 
 WiFiClient espClient;
 PubSubClient client(espClient);

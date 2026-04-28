@@ -136,15 +136,10 @@ export default function IgnitionScreen({ route, navigation }: Props) {
           const isDone   = i < currentIndex;
           const color    = isActive ? p.color : isDone ? COLORS.muted : COLORS.dim;
           return (
-            <React.Fragment key={p.key}>
-              {i > 0 && (
-                <View style={[stepStyles.stepLine, { backgroundColor: isDone ? COLORS.muted : COLORS.dim }]} />
-              )}
-              <View style={stepStyles.stepItem}>
-                <View style={[stepStyles.stepDot, { backgroundColor: color }]} />
-                <Text style={[stepStyles.stepLabel, { color }]}>{p.label}</Text>
-              </View>
-            </React.Fragment>
+            <View key={p.key} style={stepStyles.stepItem}>
+              <View style={[stepStyles.stepDot, { backgroundColor: color }]} />
+              <Text style={[stepStyles.stepLabel, { color }]}>{p.label}</Text>
+            </View>
           );
         })}
       </View>
@@ -221,19 +216,8 @@ export default function IgnitionScreen({ route, navigation }: Props) {
                 : `Mencoba menyalakan kompor... (Sesi ${sesi}/${MAX_SESI})`}
             </Text>
 
-            {/* Progress bar */}
-            <View style={ignitionStyles.barTrack}>
-              <Animated.View style={[
-                ignitionStyles.barFill,
-                {
-                  width: barWidth,
-                  backgroundColor: apiMenyala ? COLORS.fire : COLORS.accent,
-                },
-              ]} />
-            </View>
-
             {/* Status label */}
-            <Text style={[ignitionStyles.barLabel, { color: apiMenyala ? COLORS.fire : COLORS.muted }]}>
+            <Text style={[ignitionStyles.barLabel, { color: apiMenyala ? COLORS.fire : COLORS.muted, marginTop: 20 }]}>
               {apiMenyala
                 ? '✓ Berhasil — menunggu konfirmasi berikutnya'
                 : sesi > 1

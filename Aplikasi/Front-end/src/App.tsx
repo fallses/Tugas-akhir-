@@ -54,6 +54,15 @@ export function setActiveProcessParams(params: typeof activeProcessParams) {
   activeProcessParams = params;
 }
 
+// Ref untuk tracking action terakhir (untuk mencegah loop)
+let lastActionRef: string | null = null;
+let isFinished: boolean = false; // Flag untuk menandai proses sudah finish
+
+export function resetLastAction() {
+  lastActionRef = null;
+  isFinished = false; // Reset flag finish juga
+}
+
 export default function App() {
   const pollRef       = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollFinishRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -70,6 +79,13 @@ export default function App() {
 
         const nav = navigationRef.current;
         if (!nav || !nav.isReady()) return;
+
+        // Jangan proses action jika sudah finish
+        if (isFinished) return;
+
+        // Jangan proses action yang sama berulang kali
+        if (lastActionRef === action) return;
+        lastActionRef = action;
 
         console.log(`[App] Action diterima: "${action}"`);
         const params = activeProcessParams ?? {
@@ -118,6 +134,8 @@ export default function App() {
     }
 
     // ── Polling /finish (sterilisasi/finish) ─────────────────
+    // Data finish di-consume di backend setelah dibaca (sekali pakai)
+    // Jadi tidak perlu tracking kompleks, data otomatis hilang setelah dibaca
     async function checkFinish() {
       try {
         const res = await fetchFinishData();
@@ -127,7 +145,11 @@ export default function App() {
         if (!nav || !nav.isReady()) return;
 
         const { suhu, tekanan, waktu } = res.data;
-        console.log('[App] Finish diterima dari sterilisasi/finish');
+        console.log('[App] Finish diterima dari sterilisasi/finish (consumed)');
+
+        // Set flag finish agar checkAction tidak proses action lagi
+        isFinished = true;
+        lastActionRef = null;
 
         const params = activeProcessParams ?? {
           namaAlat: '-',

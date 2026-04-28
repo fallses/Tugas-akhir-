@@ -25,6 +25,7 @@ import sharedStyles, {
 } from '../styles/ProcessScreen.styles';
 import { ProcessParams } from '../types/process';
 import { addHistory } from '../types/process';
+import { resetLastAction } from '../App';
 
 const PHASES = [
   { key: 'set',       label: 'SET',     color: COLORS.accent },
@@ -221,15 +222,16 @@ export default function FinishScreen({ route, navigation }: Props) {
           <View style={{ width: '100%', gap: 10 }}>
             <TouchableOpacity
               style={finishStyles.doneBtn}
-              onPress={() =>
+              onPress={() => {
+                resetLastAction();
                 navigation.navigate('SetScreen', {
                   namaAlat,
                   idAlat,
                   sterilDetik,
                   inputSuhu,
                   inputTekanan,
-                })
-              }
+                });
+              }}
             >
               <MaterialCommunityIcons name="refresh" size={18} color={COLORS.bg} />
               <Text style={finishStyles.doneBtnText}>Proses Baru</Text>
@@ -237,7 +239,10 @@ export default function FinishScreen({ route, navigation }: Props) {
 
             <TouchableOpacity
               style={finishStyles.secondaryBtn}
-              onPress={() => navigation.navigate('Dashboard')}
+              onPress={() => {
+                resetLastAction();
+                navigation.navigate('Dashboard');
+              }}
             >
               <MaterialCommunityIcons name="home-outline" size={18} color={COLORS.muted} />
               <Text style={finishStyles.secondaryBtnText}>Kembali ke Dashboard</Text>
