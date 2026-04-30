@@ -14,21 +14,23 @@ const setSchema = new mongoose.Schema({
 
 // ── Koleksi: data dari topik sterilisasi/running ──
 const runningSchema = new mongoose.Schema({
-  action:   { type: String },
-  suhu:     { type: Number },
-  tekanan:  { type: Number },
-  waktu:    { type: mongoose.Schema.Types.Mixed },
-  device:   { type: String },
-  sesi:     { type: String },
-  status:   { type: String },
-  createdAt:{ type: Date, default: Date.now },
+  action:    { type: String },
+  suhu:      { type: Number },
+  tekanan:   { type: Number },
+  timer:     { type: String },      // Format: "HH:MM:SS" untuk action "running"
+  device:    { type: String },
+  sesi:      { type: String },      // Untuk action "ignition"
+  status:    { type: String },      // Untuk action "ignition"
+  percobaan: { type: Number },      // Untuk action "ignition_failed"
+  createdAt: { type: Date, default: Date.now },
 });
 
 // ── Koleksi: data dari topik sterilisasi/finish ──
 const finishSchema = new mongoose.Schema({
+  action:   { type: String, default: "finish" },
   suhu:     { type: Number },
   tekanan:  { type: Number },
-  waktu:    { type: mongoose.Schema.Types.Mixed },
+  waktu:    { type: String },  // Format: "HH:MM" (durasi yang diset)
   device:   { type: String },
   createdAt:{ type: Date, default: Date.now },
 });

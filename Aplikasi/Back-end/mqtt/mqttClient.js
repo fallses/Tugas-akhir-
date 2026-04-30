@@ -4,35 +4,39 @@ const broker = "mqtt://broker.hivemq.com";
 const { Set, Running, Finish } = require("../models/sterilisasi");
 
 /**
- * TOPIK MQTT:
+ * TOPIK MQTT (sesuai format alat ESP32):
  *
  * SUBSCRIBE (menerima dari perangkat):
- *   sterilisasi/running  — respon proses dari perangkat (countdown, running, ignition)
- *     payload: { action, suhu, tekanan, waktu, Device, sesi, status }
+ *   sterilisasi/set      — konfirmasi START dari perangkat
+ *     payload: { action: "start", suhu, tekanan, waktu, Device }
+ *     waktu format: "HH:MM" (contoh: "00:30")
+ *
+ *   sterilisasi/running  — respon proses dari perangkat
+ *     payload: { action, suhu, tekanan, timer, Device, sesi, status }
  *     action yang dikenali:
- *       "countdown" → pindah ke CountdownScreen
- *       "running"   → pindah ke RunningScreen
- *       "ignition"  → pindah ke IgnitionScreen
+ *       "countdown" → countdown dimulai
+ *       "ignition"  → proses penyalaan api (sesi: "1"/"2"/"3", status: "prosesing"/"api menyala")
+ *       "running"   → proses sterilisasi berjalan (timer format: "HH:MM:SS")
+ *       "stop"      → proses dihentikan
  *
  *   sterilisasi/finish   — sinyal selesai dari perangkat
- *     payload: { suhu, tekanan, waktu, Device }
- *     → pindah ke FinishScreen
- *
- *   sterilisasi/set      — perintah yang dikirim ke perangkat (juga di-subscribe untuk logging)
- *     payload: { action, suhu, tekanan, waktu, Device }
- *     action yang dikirim:
- *       "start" → mulai proses
- *       "stop"  → hentikan proses
+ *     payload: { action: "finish", suhu, tekanan, waktu, Device }
+ *     waktu format: "HH:MM" (durasi yang diset)
  *
  * PUBLISH (mengirim ke perangkat):
- *   sterilisasi/set      — perintah dari aplikasi ke perangkat
- *     payload: { action, suhu, tekanan, waktu, Device }
+ *   sterilisasi/set      — perintah START ke perangkat
+ *     payload: { action: "start", suhu, tekanan, waktu, Device }
+ *     waktu format: "HH:MM" (contoh: "00:30")
+ *
+ *   sterilisasi/running  — perintah STOP ke perangkat
+ *     payload: { action: "stop", Device }
  */
 
-const SUBSCRIBE_TOPIC  = "sterilisasi/running";
-const FINISH_TOPIC     = "sterilisasi/finish";
-const SET_TOPIC        = "sterilisasi/set";
-const PUBLISH_TOPIC    = "sterilisasi/set";
+const SUBSCRIBE_RUNNING = "sterilisasi/running";
+const SUBSCRIBE_FINISH  = "sterilisasi/finish";
+const SUBSCRIBE_SET     = "sterilisasi/set";
+const PUBLISH_SET       = "sterilisasi/set";
+const PUBLISH_RUNNING   = "sterilisasi/running";
 
 const client = mqtt.connect(broker);
 
@@ -42,18 +46,18 @@ let lastFinishData = null;
 client.on("connect", () => {
   console.log("MQTT Terhubung ✅ →", broker);
 
-  client.subscribe(SUBSCRIBE_TOPIC, (err) => {
-    if (!err) console.log("Subscribe ke topic:", SUBSCRIBE_TOPIC);
+  client.subscribe(SUBSCRIBE_RUNNING, (err) => {
+    if (!err) console.log("Subscribe ke topic:", SUBSCRIBE_RUNNING);
     else console.error("Gagal subscribe:", err.message);
   });
 
-  client.subscribe(FINISH_TOPIC, (err) => {
-    if (!err) console.log("Subscribe ke topic:", FINISH_TOPIC);
+  client.subscribe(SUBSCRIBE_FINISH, (err) => {
+    if (!err) console.log("Subscribe ke topic:", SUBSCRIBE_FINISH);
     else console.error("Gagal subscribe:", err.message);
   });
 
-  client.subscribe(SET_TOPIC, (err) => {
-    if (!err) console.log("Subscribe ke topic:", SET_TOPIC);
+  client.subscribe(SUBSCRIBE_SET, (err) => {
+    if (!err) console.log("Subscribe ke topic:", SUBSCRIBE_SET);
     else console.error("Gagal subscribe:", err.message);
   });
 });
@@ -74,13 +78,14 @@ client.on("message", async (receivedTopic, message) => {
   const fallbackWaktu = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
 
   // ── Topik sterilisasi/set ─────────────────────────────────
-  if (receivedTopic === SET_TOPIC) {
+  // Alat mengirim konfirmasi START dengan format:
+  // {"action":"start","suhu":120,"tekanan":1.0,"waktu":"00:30","Device":"AUTOCLAVE-01"}
+  if (receivedTopic === SUBSCRIBE_SET) {
     const action = data.action ?? null;
     
-    console.log(`[sterilisasi/set] Menerima perintah: ${action}`);
+    console.log(`[sterilisasi/set] Menerima konfirmasi dari alat: ${action}`);
     
     try {
-      // Simpan ke koleksi Set (collection baru khusus untuk topik sterilisasi/set)
       const setData = {
         action:   action,
         device:   data.Device  ?? data.device ?? "unknown",
@@ -96,7 +101,7 @@ client.on("message", async (receivedTopic, message) => {
         setData.tekanan = data.tekanan;
       }
       if (data.waktu !== undefined && data.waktu !== null) {
-        setData.waktu = data.waktu;
+        setData.waktu = data.waktu; // Format: "HH:MM"
       }
 
       await new Set(setData).save();
@@ -109,11 +114,14 @@ client.on("message", async (receivedTopic, message) => {
   }
 
   // ── Topik sterilisasi/finish ──────────────────────────────
-  if (receivedTopic === FINISH_TOPIC) {
+  // Alat mengirim sinyal selesai dengan format:
+  // {"action":"finish","suhu":120.5,"tekanan":1.2,"waktu":"00:30","Device":"AUTOCLAVE-01"}
+  if (receivedTopic === SUBSCRIBE_FINISH) {
     const finishData = {
+      action:  data.action  ?? "finish",
       suhu:    data.suhu    ?? null,
       tekanan: data.tekanan ?? null,
-      waktu:   data.waktu   ?? fallbackWaktu,
+      waktu:   data.waktu   ?? fallbackWaktu, // Format: "HH:MM"
       device:  data.Device  ?? data.device ?? null,
     };
     
@@ -131,14 +139,19 @@ client.on("message", async (receivedTopic, message) => {
   }
 
   // ── Topik sterilisasi/running ─────────────────────────────
+  // Alat mengirim berbagai action:
+  // - countdown: {"action":"countdown","Device":"AUTOCLAVE-01"}
+  // - ignition: {"action":"ignition","sesi":"1","status":"prosesing","Device":"AUTOCLAVE-01"}
+  // - running: {"action":"running","suhu":120.5,"tekanan":1.2,"timer":"00:29:45","Device":"AUTOCLAVE-01"}
+  // - stop: {"action":"stop","Device":"AUTOCLAVE-01"}
   const action = data.action ?? null;
   if (!action) {
     console.warn("Tidak ada field action di payload, diabaikan");
     return;
   }
 
-  // Hanya proses action yang dikenali (finish sudah ditangani topik sendiri)
-  const validActions = ["countdown", "running", "ignition"];
+  // Hanya proses action yang dikenali
+  const validActions = ["countdown", "running", "ignition", "stop", "ignition_failed"];
   if (!validActions.includes(action)) {
     console.warn("Action tidak dikenali:", action);
     return;
@@ -148,10 +161,11 @@ client.on("message", async (receivedTopic, message) => {
     action,
     suhu:    data.suhu    ?? null,
     tekanan: data.tekanan ?? null,
-    waktu:   data.waktu   ?? fallbackWaktu,
+    timer:   data.timer   ?? null,  // Format: "HH:MM:SS" untuk action "running"
     device:  data.Device  ?? data.device ?? null,
-    sesi:    data.sesi    ?? null,
-    status:  data.status  ?? null,
+    sesi:    data.sesi    ?? null,    // Untuk action "ignition"
+    status:  data.status  ?? null,    // Untuk action "ignition"
+    percobaan: data.percobaan ?? null, // Untuk action "ignition_failed"
   };
   
   lastData = runningData;
@@ -172,13 +186,29 @@ module.exports = {
   consumeAction:      () => { if (lastData) lastData.action = null; },
   getLastFinishData:  () => lastFinishData,
   consumeFinish:      () => { lastFinishData = null; },
-  PUBLISH_TOPIC,
+  
+  // Publish perintah START ke alat (topik: sterilisasi/set)
+  // Format: {"action":"start","suhu":120,"tekanan":1.0,"waktu":"00:30","Device":"AUTOCLAVE-01"}
   publishSet: (payload) => {
     return new Promise((resolve, reject) => {
-      client.publish(PUBLISH_TOPIC, JSON.stringify(payload), (err) => {
+      client.publish(PUBLISH_SET, JSON.stringify(payload), (err) => {
         if (err) reject(err);
         else {
-          console.log(`[PUBLISH] ${PUBLISH_TOPIC}:`, JSON.stringify(payload));
+          console.log(`[PUBLISH] ${PUBLISH_SET}:`, JSON.stringify(payload));
+          resolve();
+        }
+      });
+    });
+  },
+  
+  // Publish perintah STOP ke alat (topik: sterilisasi/running)
+  // Format: {"action":"stop","Device":"AUTOCLAVE-01"}
+  publishStop: (payload) => {
+    return new Promise((resolve, reject) => {
+      client.publish(PUBLISH_RUNNING, JSON.stringify(payload), (err) => {
+        if (err) reject(err);
+        else {
+          console.log(`[PUBLISH] ${PUBLISH_RUNNING}:`, JSON.stringify(payload));
           resolve();
         }
       });

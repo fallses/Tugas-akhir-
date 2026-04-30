@@ -4,12 +4,13 @@ const { Set, Running, Finish } = require("../models/sterilisasi");
 const mqttClient       = require("../mqtt/mqttClient");
 
 // ── POST /sterilisasi/set ─────────────────────────────────────
-// Frontend kirim parameter → publish ke MQTT
+// Frontend kirim parameter → publish ke MQTT (topik: sterilisasi/set)
+// Format ke alat: {"action":"start","suhu":120,"tekanan":1.0,"waktu":"00:30","Device":"AUTOCLAVE-01"}
 router.post("/set", async (req, res) => {
   try {
-    const { action, suhu, tekanan, waktu, device, namaAlat } = req.body;
+    const { action, suhu, tekanan, waktu, device } = req.body;
 
-    // Validasi minimal - hanya device yang wajib
+    // Validasi minimal - device wajib
     if (!device) {
       return res.status(400).json({
         status:  "error",
@@ -17,12 +18,21 @@ router.post("/set", async (req, res) => {
       });
     }
 
+    // Konversi waktu ke format "HH:MM" jika diperlukan
+    let waktuFormatted = waktu;
+    if (typeof waktu === "number") {
+      // Jika waktu dalam menit, konversi ke "HH:MM"
+      const jam = Math.floor(waktu / 60);
+      const menit = waktu % 60;
+      waktuFormatted = `${String(jam).padStart(2, '0')}:${String(menit).padStart(2, '0')}`;
+    }
+
     // Payload ke MQTT (sesuai format alat)
     const mqttPayload = {
-      action:  action || "start", // default "start" jika tidak ada action
+      action:  action || "start",
       suhu:    suhu ? Number(suhu) : null,
       tekanan: tekanan ? Number(tekanan) : null,
-      waktu:   waktu,  // bisa Number atau String
+      waktu:   waktuFormatted,  // Format: "HH:MM"
       Device:  device,
     };
 
@@ -32,6 +42,45 @@ router.post("/set", async (req, res) => {
     res.json({
       status:  "success",
       message: `Perintah ${action || 'start'} berhasil dikirim ke alat`,
+      data: mqttPayload,
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      status:  "error",
+      message: error.message,
+    });
+  }
+});
+
+// ── POST /sterilisasi/stop ────────────────────────────────────
+// Frontend kirim perintah STOP → publish ke MQTT (topik: sterilisasi/running)
+// Format ke alat: {"action":"stop","Device":"AUTOCLAVE-01"}
+router.post("/stop", async (req, res) => {
+  try {
+    const { device } = req.body;
+
+    // Validasi minimal - device wajib
+    if (!device) {
+      return res.status(400).json({
+        status:  "error",
+        message: "Field device wajib diisi",
+      });
+    }
+
+    // Payload ke MQTT (sesuai format alat)
+    const mqttPayload = {
+      action: "stop",
+      Device: device,
+    };
+
+    // Publish ke MQTT → alat menerima perintah STOP
+    await mqttClient.publishStop(mqttPayload);
+
+    res.json({
+      status:  "success",
+      message: "Perintah STOP berhasil dikirim ke alat",
+      data: mqttPayload,
     });
 
   } catch (error) {
