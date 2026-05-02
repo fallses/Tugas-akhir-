@@ -15,6 +15,7 @@ import {
   StatusBar,
   ActivityIndicator,
   TouchableOpacity,
+  BackHandler,
 } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Animated } from 'react-native';
@@ -49,6 +50,21 @@ export default function CountdownScreen({ route, navigation }: Props) {
   const [countValue, setCountValue] = useState(3);
   const [showLoading, setShowLoading] = useState(false);
   const [stopping, setStopping] = useState(false);
+
+  // Tombol back hardware → reset stack ke SetScreen
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      navigation.reset({
+        index: 1,
+        routes: [
+          { name: 'Dashboard' },
+          { name: 'SetScreen', params: route.params },
+        ],
+      });
+      return true;
+    });
+    return () => sub.remove();
+  }, [navigation]);
 
   const numberScale    = useRef(new Animated.Value(1)).current;
   const numberOpacity  = useRef(new Animated.Value(1)).current;

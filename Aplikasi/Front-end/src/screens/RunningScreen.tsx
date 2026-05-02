@@ -1,10 +1,9 @@
 /**
  * RunningScreen.tsx
  *
- * Tampilan sterilisasi berjalan — HANYA menampilkan timer & progress.
- * Tidak ada otomasi, tidak mengirim/memproses data backend.
- * Tidak berpindah sendiri — menunggu action "finish" dari backend.
- * Jika belum ada kiriman data baru → tetap di halaman ini (loading).
+ * Tampilan sterilisasi berjalan.
+ * - Bagian atas: suhu & tekanan REAL-TIME dari database (polling /running/last)
+ * - Bagian bawah: suhu & tekanan TARGET yang diset dari menu Set
  *
  * Timer berjalan mundur sebagai indikator visual saja.
  * Perpindahan ke FinishScreen HANYA terjadi saat backend mengirim action "finish".
@@ -18,6 +17,7 @@ import {
   StatusBar,
   TouchableOpacity,
   ActivityIndicator,
+  BackHandler,
 } from 'react-native';
 import { Animated } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -29,7 +29,8 @@ import sharedStyles, {
   bottomStyles,
 } from '../styles/ProcessScreen.styles';
 import { ProcessParams } from '../types/process';
-import { sendStop } from '../services/backendService';
+import { sendStop, fetchLastRunning } from '../services/backendService';
+import { POLL_INTERVAL_MS } from '../config';
 
 const PHASES = [
   { key: 'set',       label: 'SET',     color: COLORS.accent },
@@ -53,8 +54,28 @@ export default function RunningScreen({ route, navigation }: Props) {
   const remainingRef = useRef(sterilDetik);
   const [stopping, setStopping] = useState(false);
 
+  // Suhu & tekanan real-time dari database
+  const [realtimeSuhu,    setRealtimeSuhu]    = useState<number | null>(null);
+  const [realtimeTekanan, setRealtimeTekanan] = useState<number | null>(null);
+  const [realtimeLoading, setRealtimeLoading] = useState(true);
+
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeIn    = useRef(new Animated.Value(0)).current;
+
+  // Tombol back hardware → reset stack ke SetScreen
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      navigation.reset({
+        index: 1,
+        routes: [
+          { name: 'Dashboard' },
+          { name: 'SetScreen', params: route.params },
+        ],
+      });
+      return true;
+    });
+    return () => sub.remove();
+  }, [navigation]);
 
   // Fade in saat masuk
   useEffect(() => {
@@ -85,6 +106,29 @@ export default function RunningScreen({ route, navigation }: Props) {
     return () => clearInterval(tick);
   }, []);
 
+  // Polling real-time suhu & tekanan dari /sterilisasi/running/last
+  useEffect(() => {
+    async function pollRealtime() {
+      try {
+        const res = await fetchLastRunning();
+        if (res.status === 'success' && res.data) {
+          const { suhu, tekanan } = res.data;
+          if (suhu    != null) setRealtimeSuhu(suhu);
+          if (tekanan != null) setRealtimeTekanan(tekanan);
+        }
+      } catch {
+        // Gagal polling — coba lagi di interval berikutnya
+      } finally {
+        setRealtimeLoading(false);
+      }
+    }
+
+    // Langsung poll sekali saat masuk screen
+    pollRealtime();
+    const interval = setInterval(pollRealtime, POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, []);
+
   async function handleStop() {
     setStopping(true);
     try {
@@ -95,7 +139,8 @@ export default function RunningScreen({ route, navigation }: Props) {
     navigation.navigate('SetScreen', route.params);
   }
 
-  function formatTime(secs: number) {    const h  = Math.floor(secs / 3600);
+  function formatTime(secs: number) {
+    const h  = Math.floor(secs / 3600);
     const m  = Math.floor((secs % 3600) / 60);
     const s  = secs % 60;
     const mm = m.toString().padStart(2, '0');
@@ -169,18 +214,51 @@ export default function RunningScreen({ route, navigation }: Props) {
             <Text style={runningStyles.label}>Sterilisasi Berjalan</Text>
             <Text style={runningStyles.timer}>{formatTime(remainingSeconds)}</Text>
             <Text style={runningStyles.timerSub}>Sisa waktu</Text>
-            <View style={runningStyles.statsRow}>
-              <View style={runningStyles.statCard}>
-                <MaterialCommunityIcons name="thermometer-high" size={20} color={COLORS.fire} />
-                <Text style={runningStyles.statValue}>{inputSuhu}°C</Text>
-                <Text style={runningStyles.statLabel}>Suhu</Text>
+
+            {/* ── 1 card: baris atas real-time, baris bawah target set ── */}
+            <View style={runningStyles.monitorCard}>
+
+              {/* Baris atas — real-time dari database */}
+              <View style={runningStyles.monitorRow}>
+                <View style={runningStyles.monitorCol}>
+                  <Text style={runningStyles.monitorLabel}>Suhu</Text>
+                  {realtimeLoading
+                    ? <ActivityIndicator size="small" color={COLORS.fire} />
+                    : <Text style={[runningStyles.monitorValue, { color: COLORS.fire }]}>
+                        {realtimeSuhu != null ? `${realtimeSuhu}°C` : '--'}
+                      </Text>
+                  }
+                </View>
+                <View style={runningStyles.monitorDivider} />
+                <View style={runningStyles.monitorCol}>
+                  <Text style={runningStyles.monitorLabel}>Tekanan</Text>
+                  {realtimeLoading
+                    ? <ActivityIndicator size="small" color={COLORS.accent} />
+                    : <Text style={[runningStyles.monitorValue, { color: COLORS.accent }]}>
+                        {realtimeTekanan != null ? `${realtimeTekanan} bar` : '--'}
+                      </Text>
+                  }
+                </View>
               </View>
-              <View style={runningStyles.statCard}>
-                <MaterialCommunityIcons name="gauge" size={20} color={COLORS.accent} />
-                <Text style={runningStyles.statValue}>{inputTekanan} bar</Text>
-                <Text style={runningStyles.statLabel}>Tekanan</Text>
+
+              {/* Garis pemisah */}
+              <View style={runningStyles.monitorSeparator} />
+
+              {/* Baris bawah — target dari menu Set */}
+              <View style={runningStyles.monitorRow}>
+                <View style={runningStyles.monitorCol}>
+                  <Text style={runningStyles.monitorLabel}>Suhu Set</Text>
+                  <Text style={runningStyles.monitorValueSub}>{inputSuhu}°C</Text>
+                </View>
+                <View style={runningStyles.monitorDivider} />
+                <View style={runningStyles.monitorCol}>
+                  <Text style={runningStyles.monitorLabel}>Tekanan Set</Text>
+                  <Text style={runningStyles.monitorValueSub}>{inputTekanan} bar</Text>
+                </View>
               </View>
+
             </View>
+
             <View style={runningStyles.progressTrack}>
               <View style={[runningStyles.progressFill, { width: `${pct}%` }]} />
             </View>

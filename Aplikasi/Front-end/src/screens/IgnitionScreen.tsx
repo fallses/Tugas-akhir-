@@ -24,6 +24,7 @@ import {
   StatusBar,
   TouchableOpacity,
   ActivityIndicator,
+  BackHandler,
 } from 'react-native';
 import { Animated } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -70,6 +71,21 @@ export default function IgnitionScreen({ route, navigation }: Props) {
   const waitingNext = sesi >= MAX_SESI && apiMenyala;
 
   const [stopping, setStopping] = useState(false);
+
+  // Tombol back hardware → reset stack ke SetScreen
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      navigation.reset({
+        index: 1,
+        routes: [
+          { name: 'Dashboard' },
+          { name: 'SetScreen', params: route.params },
+        ],
+      });
+      return true;
+    });
+    return () => sub.remove();
+  }, [navigation]);
 
   const flameAnim = useRef(new Animated.Value(1)).current;
   const fadeIn    = useRef(new Animated.Value(0)).current;

@@ -14,6 +14,7 @@ import {
   StatusBar,
   TouchableOpacity,
   ScrollView,
+  BackHandler,
 } from 'react-native';
 import { Animated } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -67,6 +68,21 @@ export default function FinishScreen({ route, navigation }: Props) {
 
   const checkScale = useRef(new Animated.Value(0)).current;
   const fadeIn     = useRef(new Animated.Value(0)).current;
+
+  // Tombol back hardware → reset stack ke SetScreen
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      navigation.reset({
+        index: 1,
+        routes: [
+          { name: 'Dashboard' },
+          { name: 'SetScreen', params: { namaAlat, idAlat, sterilDetik, inputSuhu, inputTekanan } },
+        ],
+      });
+      return true;
+    });
+    return () => sub.remove();
+  }, [navigation]);
 
   // Simpan ke history saat screen ini pertama kali muncul
   useEffect(() => {
@@ -222,12 +238,12 @@ export default function FinishScreen({ route, navigation }: Props) {
             <TouchableOpacity
               style={finishStyles.doneBtn}
               onPress={() =>
-                navigation.navigate('SetScreen', {
-                  namaAlat,
-                  idAlat,
-                  sterilDetik,
-                  inputSuhu,
-                  inputTekanan,
+                navigation.reset({
+                  index: 1,
+                  routes: [
+                    { name: 'Dashboard' },
+                    { name: 'SetScreen', params: { namaAlat, idAlat, sterilDetik, inputSuhu, inputTekanan } },
+                  ],
                 })
               }
             >
