@@ -1,28 +1,43 @@
 const mongoose = require("mongoose");
 
-// ── Koleksi: sesi sterilisasi (dikirim dari frontend) ──
-const sesiSchema = new mongoose.Schema({
-  action:   { type: String, default: "start" }, // start | stop
-  suhu:     { type: Number, required: true },
-  tekanan:  { type: Number, required: true },
-  waktu:    { type: Number, required: true },   // durasi dalam detik
-  device:   { type: String, required: true },   // ID alat
+// ── Koleksi: data dari topik sterilisasi/set ──────────────
+// Menyimpan perintah yang dikirim dari aplikasi ke alat
+const setSchema = new mongoose.Schema({
+  action:   { type: String },
+  suhu:     { type: Number },
+  tekanan:  { type: Number },
+  waktu:    { type: mongoose.Schema.Types.Mixed },
+  device:   { type: String },
   namaAlat: { type: String, default: "" },
-  status:   { type: String, default: "running" }, // running | selesai | dihentikan
-  createdAt:{ type: Date,   default: Date.now },
-});
-
-// ── Koleksi: data sensor realtime (diterima dari MQTT alat) ──
-const sensorSchema = new mongoose.Schema({
-  suhu:     Number,
-  tekanan:  Number,
-  action:   String,
-  waktu:    String,
-  device:   String,
+  status:   { type: String, default: "unknown" },
   createdAt:{ type: Date, default: Date.now },
 });
 
-const Sesi   = mongoose.model("SesiSterilisasi", sesiSchema);
-const Sensor = mongoose.model("SensorData",      sensorSchema);
+// ── Koleksi: data dari topik sterilisasi/running ──────────
+// Menyimpan status proses yang dikirim alat ke backend
+const runningSchema = new mongoose.Schema({
+  action:   { type: String },
+  suhu:     { type: Number },
+  tekanan:  { type: Number },
+  waktu:    { type: mongoose.Schema.Types.Mixed },
+  device:   { type: String },
+  sesi:     { type: String },
+  status:   { type: String },
+  createdAt:{ type: Date, default: Date.now },
+});
 
-module.exports = { Sesi, Sensor };
+// ── Koleksi: data dari topik sterilisasi/finish ───────────
+// Menyimpan data saat proses selesai
+const finishSchema = new mongoose.Schema({
+  suhu:     { type: Number },
+  tekanan:  { type: Number },
+  waktu:    { type: mongoose.Schema.Types.Mixed },
+  device:   { type: String },
+  createdAt:{ type: Date, default: Date.now },
+});
+
+const Set     = mongoose.model("Set",     setSchema);
+const Running = mongoose.model("Running", runningSchema);
+const Finish  = mongoose.model("Finish",  finishSchema);
+
+module.exports = { Set, Running, Finish };

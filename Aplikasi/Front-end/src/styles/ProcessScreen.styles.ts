@@ -573,6 +573,58 @@ export const runningStyles = StyleSheet.create({
     marginTop: 2,
     marginBottom: 28,
   },
+  // ── Monitor card ──
+  monitorCard: {
+    width: '100%',
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  monitorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  monitorCol: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+    gap: 5,
+  },
+  monitorDivider: {
+    width: 1,
+    height: 50,
+    backgroundColor: COLORS.border,
+  },
+  monitorValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  monitorValueSub: {
+    color: COLORS.muted,
+    fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  monitorLabel: {
+    color: COLORS.muted,
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  monitorSeparator: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginVertical: 4,
+    width: '100%',
+  },
   statsRow: {
     flexDirection: 'row',
     gap: 12,

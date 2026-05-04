@@ -1,13 +1,12 @@
 /**
  * RunningScreen.tsx
  *
- * Tampilan sterilisasi berjalan — HANYA menampilkan timer & progress.
- * Tidak ada otomasi, tidak mengirim/memproses data backend.
- * Tidak berpindah sendiri — menunggu action "finish" dari backend.
- * Jika belum ada kiriman data baru → tetap di halaman ini (loading).
+ * Tampilan sterilisasi berjalan.
+ * - Baris atas card: suhu & tekanan REAL-TIME dari database (polling /running/last)
+ * - Baris bawah card: suhu & tekanan TARGET dari /set/last (sekali saat masuk)
+ * - Timer: di-sync dari field waktu yang dikirim alat (sekali saat pertama kali data masuk)
  *
- * Timer berjalan mundur sebagai indikator visual saja.
- * Perpindahan ke FinishScreen HANYA terjadi saat backend mengirim action "finish".
+ * Perpindahan ke FinishScreen HANYA terjadi saat backend mengirim sinyal finish.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -18,6 +17,7 @@ import {
   StatusBar,
   TouchableOpacity,
   ActivityIndicator,
+  BackHandler,
 } from 'react-native';
 import { Animated } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -29,12 +29,8 @@ import sharedStyles, {
   bottomStyles,
 } from '../styles/ProcessScreen.styles';
 import { ProcessParams } from '../types/process';
-<<<<<<< Updated upstream
-import { sendStop } from '../services/backendService';
-=======
 import { sendStop, fetchLastRunning, fetchLastSet } from '../services/backendService';
 import { POLL_INTERVAL_MS } from '../config';
->>>>>>> Stashed changes
 
 const PHASES = [
   { key: 'set',       label: 'SET',     color: COLORS.accent },
@@ -45,9 +41,7 @@ const PHASES = [
 ];
 
 interface Props {
-  route: {
-    params: ProcessParams;
-  };
+  route: { params: ProcessParams };
   navigation: any;
 }
 
@@ -55,28 +49,37 @@ export default function RunningScreen({ route, navigation }: Props) {
   const { namaAlat, idAlat, sterilDetik, inputSuhu, inputTekanan } = route.params;
 
   const [remainingSeconds, setRemainingSeconds] = useState(sterilDetik);
-  const remainingRef = useRef(sterilDetik);
+  const remainingRef   = useRef(sterilDetik);
+  const totalDetikRef  = useRef(sterilDetik);   // untuk progress bar
+  const timerSyncedRef = useRef(false);          // sync timer dari alat hanya sekali
   const [stopping, setStopping] = useState(false);
 
-<<<<<<< Updated upstream
-=======
   // Suhu & tekanan real-time dari database (topik running)
   const [realtimeSuhu,    setRealtimeSuhu]    = useState<number | null>(null);
   const [realtimeTekanan, setRealtimeTekanan] = useState<number | null>(null);
   const [realtimeLoading, setRealtimeLoading] = useState(true);
 
-  // Suhu & tekanan target dari database (topik set — yang dikirim saat start)
+  // Suhu & tekanan target dari /set/last
   const [setSuhu,    setSetSuhu]    = useState<string>(inputSuhu);
   const [setTekanan, setSetTekanan] = useState<string>(inputTekanan);
 
-  // Total detik untuk progress bar — diupdate saat timer di-sync dari alat
-  const totalDetikRef    = useRef(sterilDetik);
-  // Sudah dapat waktu dari alat sekali atau belum
-  const timerSyncedRef   = useRef(false);
-
->>>>>>> Stashed changes
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeIn    = useRef(new Animated.Value(0)).current;
+
+  // Tombol back hardware → reset stack ke SetScreen
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      navigation.reset({
+        index: 1,
+        routes: [
+          { name: 'Dashboard' },
+          { name: 'SetScreen', params: route.params },
+        ],
+      });
+      return true;
+    });
+    return () => sub.remove();
+  }, [navigation]);
 
   // Fade in saat masuk
   useEffect(() => {
@@ -95,7 +98,7 @@ export default function RunningScreen({ route, navigation }: Props) {
     return () => pulse.stop();
   }, [pulseAnim]);
 
-  // Timer mundur — hanya visual, tidak memicu perpindahan screen
+  // Timer mundur — hanya visual
   useEffect(() => {
     const tick = setInterval(() => {
       setRemainingSeconds(s => {
@@ -107,10 +110,7 @@ export default function RunningScreen({ route, navigation }: Props) {
     return () => clearInterval(tick);
   }, []);
 
-<<<<<<< Updated upstream
-=======
-  // Polling real-time suhu & tekanan dari /sterilisasi/running/last
-  // Juga ambil waktu dari alat untuk sinkronisasi timer (sekali saja)
+  // Polling real-time suhu & tekanan + sync timer dari alat (sekali)
   useEffect(() => {
     async function pollRealtime() {
       try {
@@ -120,17 +120,17 @@ export default function RunningScreen({ route, navigation }: Props) {
           if (suhu    != null) setRealtimeSuhu(suhu);
           if (tekanan != null) setRealtimeTekanan(tekanan);
 
-          // Sinkronisasi timer dari waktu yang dikirim alat (hanya sekali)
+          // Sync timer dari waktu alat — hanya sekali
           if (!timerSyncedRef.current && waktu != null) {
             const parts = String(waktu).split(':');
             if (parts.length === 2) {
               const secs = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
               if (!isNaN(secs) && secs > 0) {
                 setRemainingSeconds(secs);
-                remainingRef.current   = secs;
-                totalDetikRef.current  = secs;   // simpan sebagai total untuk progress
+                remainingRef.current  = secs;
+                totalDetikRef.current = secs;
                 timerSyncedRef.current = true;
-                console.log(`[RunningScreen] Timer di-sync dari alat: ${waktu} → ${secs} detik`);
+                console.log(`[RunningScreen] Timer sync: ${waktu} → ${secs}s`);
               }
             }
           }
@@ -147,15 +147,14 @@ export default function RunningScreen({ route, navigation }: Props) {
     return () => clearInterval(interval);
   }, []);
 
-  // Ambil suhu & tekanan target dari /sterilisasi/set/last (sekali saat masuk)
+  // Ambil suhu & tekanan target dari /set/last (sekali saat masuk)
   useEffect(() => {
     async function loadSetData() {
       try {
         const res = await fetchLastSet();
         if (res.status === 'success' && res.data) {
-          const { suhu, tekanan } = res.data;
-          if (suhu    != null) setSetSuhu(suhu.toString());
-          if (tekanan != null) setSetTekanan(tekanan.toString());
+          if (res.data.suhu    != null) setSetSuhu(res.data.suhu.toString());
+          if (res.data.tekanan != null) setSetTekanan(res.data.tekanan.toString());
         }
       } catch {
         // Gagal — tetap pakai nilai dari route.params
@@ -164,7 +163,6 @@ export default function RunningScreen({ route, navigation }: Props) {
     loadSetData();
   }, []);
 
->>>>>>> Stashed changes
   async function handleStop() {
     setStopping(true);
     try {
@@ -172,10 +170,17 @@ export default function RunningScreen({ route, navigation }: Props) {
     } catch {
       // Gagal kirim — tetap kembali ke SetScreen
     }
-    navigation.navigate('SetScreen', route.params);
+    navigation.reset({
+      index: 1,
+      routes: [
+        { name: 'Dashboard' },
+        { name: 'SetScreen', params: route.params },
+      ],
+    });
   }
 
-  function formatTime(secs: number) {    const h  = Math.floor(secs / 3600);
+  function formatTime(secs: number) {
+    const h  = Math.floor(secs / 3600);
     const m  = Math.floor((secs % 3600) / 60);
     const s  = secs % 60;
     const mm = m.toString().padStart(2, '0');
@@ -188,8 +193,6 @@ export default function RunningScreen({ route, navigation }: Props) {
     ? Math.min(1 - remainingSeconds / totalDetikRef.current, 1)
     : 0;
   const pct = Math.round(progress * 100);
-
-  // Timer habis tapi belum ada kiriman finish → tampilkan loading
   const timerDone = remainingSeconds <= 0;
 
   function renderSteps() {
@@ -234,7 +237,6 @@ export default function RunningScreen({ route, navigation }: Props) {
 
       <View style={[sharedStyles.flex1, sharedStyles.center]}>
         {timerDone ? (
-          /* Timer habis, menunggu konfirmasi finish dari backend */
           <View style={{ alignItems: 'center', gap: 20 }}>
             <ActivityIndicator size="large" color={COLORS.gold} />
             <Text style={{ color: COLORS.muted, fontSize: 13, letterSpacing: 1, textAlign: 'center', paddingHorizontal: 32 }}>
@@ -249,23 +251,35 @@ export default function RunningScreen({ route, navigation }: Props) {
             <Text style={runningStyles.label}>Sterilisasi Berjalan</Text>
             <Text style={runningStyles.timer}>{formatTime(remainingSeconds)}</Text>
             <Text style={runningStyles.timerSub}>Sisa waktu</Text>
-            <View style={runningStyles.statsRow}>
-              <View style={runningStyles.statCard}>
-                <MaterialCommunityIcons name="thermometer-high" size={20} color={COLORS.fire} />
-                <Text style={runningStyles.statValue}>{inputSuhu}°C</Text>
-                <Text style={runningStyles.statLabel}>Suhu</Text>
-              </View>
-<<<<<<< Updated upstream
-              <View style={runningStyles.statCard}>
-                <MaterialCommunityIcons name="gauge" size={20} color={COLORS.accent} />
-                <Text style={runningStyles.statValue}>{inputTekanan} bar</Text>
-                <Text style={runningStyles.statLabel}>Tekanan</Text>
-=======
 
-              {/* Garis pemisah */}
+            {/* Monitor card — baris atas realtime, baris bawah target set */}
+            <View style={runningStyles.monitorCard}>
+              {/* Baris atas — real-time */}
+              <View style={runningStyles.monitorRow}>
+                <View style={runningStyles.monitorCol}>
+                  <Text style={runningStyles.monitorLabel}>Suhu</Text>
+                  {realtimeLoading
+                    ? <ActivityIndicator size="small" color={COLORS.fire} />
+                    : <Text style={[runningStyles.monitorValue, { color: COLORS.fire }]}>
+                        {realtimeSuhu != null ? `${realtimeSuhu}°C` : '--'}
+                      </Text>
+                  }
+                </View>
+                <View style={runningStyles.monitorDivider} />
+                <View style={runningStyles.monitorCol}>
+                  <Text style={runningStyles.monitorLabel}>Tekanan</Text>
+                  {realtimeLoading
+                    ? <ActivityIndicator size="small" color={COLORS.accent} />
+                    : <Text style={[runningStyles.monitorValue, { color: COLORS.accent }]}>
+                        {realtimeTekanan != null ? `${realtimeTekanan} bar` : '--'}
+                      </Text>
+                  }
+                </View>
+              </View>
+
               <View style={runningStyles.monitorSeparator} />
 
-              {/* Baris bawah — target dari menu Set */}
+              {/* Baris bawah — target set */}
               <View style={runningStyles.monitorRow}>
                 <View style={runningStyles.monitorCol}>
                   <Text style={runningStyles.monitorLabel}>Suhu Set</Text>
@@ -276,19 +290,15 @@ export default function RunningScreen({ route, navigation }: Props) {
                   <Text style={runningStyles.monitorLabel}>Tekanan Set</Text>
                   <Text style={runningStyles.monitorValueSub}>{setTekanan} bar</Text>
                 </View>
->>>>>>> Stashed changes
               </View>
             </View>
+
             <View style={runningStyles.progressTrack}>
               <View style={[runningStyles.progressFill, { width: `${pct}%` }]} />
             </View>
             <Text style={{
-              fontSize: 42,
-              fontWeight: '900',
-              color: COLORS.green,
-              letterSpacing: -1,
-              marginTop: 8,
-              lineHeight: 46,
+              fontSize: 42, fontWeight: '900', color: COLORS.green,
+              letterSpacing: -1, marginTop: 8, lineHeight: 46,
             }}>
               {pct}%
             </Text>
@@ -297,7 +307,6 @@ export default function RunningScreen({ route, navigation }: Props) {
         )}
       </View>
 
-      {/* Tombol hentikan */}
       {!timerDone && (
         <View style={bottomStyles.container}>
           <TouchableOpacity

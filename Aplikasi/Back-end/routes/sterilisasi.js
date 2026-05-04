@@ -1,85 +1,46 @@
-const express  = require("express");
-const router   = express.Router();
-const { Sesi, Sensor } = require("../models/sterilisasi");
-const mqttClient       = require("../mqtt/mqttClient");
+const express    = require("express");
+const router     = express.Router();
+const { Set, Running, Finish } = require("../models/sterilisasi");
+const mqttClient = require("../mqtt/mqttClient");
 
 // ── POST /sterilisasi/set ─────────────────────────────────────
-// Frontend kirim parameter → publish ke MQTT → simpan ke DB
+// Frontend kirim parameter start → publish ke MQTT sterilisasi/set
 router.post("/set", async (req, res) => {
   try {
-    const { suhu, tekanan, waktu, device, namaAlat } = req.body;
+    const { action, suhu, tekanan, waktu, device } = req.body;
 
-    // Validasi
-    if (!suhu || !tekanan || !waktu || !device) {
-      return res.status(400).json({
-        status:  "error",
-        message: "Field suhu, tekanan, waktu, dan device wajib diisi",
-      });
+    if (!device) {
+      return res.status(400).json({ status: "error", message: "Field device wajib diisi" });
     }
 
-    // Payload ke MQTT (sesuai format alat)
     const mqttPayload = {
-<<<<<<< Updated upstream
-      action:  "start",
-      suhu:    Number(suhu),
-      tekanan: Number(tekanan),
-      waktu:   Number(waktu),
-=======
-      action:  action || "start", // default "start" jika tidak ada action
-      suhu:    suhu != null ? Number(suhu) : null,
+      action:  action || "start",
+      suhu:    suhu    != null ? Number(suhu)    : null,
       tekanan: tekanan != null ? Number(tekanan) : null,
-      waktu:   waktu,  // bisa Number atau String
->>>>>>> Stashed changes
+      waktu,
       Device:  device,
     };
 
-    // 1. Publish ke MQTT → alat menerima perintah
     await mqttClient.publishSet(mqttPayload);
 
-    // 2. Simpan sesi ke MongoDB
-    const sesi = await new Sesi({
-      action:   "start",
-      suhu:     Number(suhu),
-      tekanan:  Number(tekanan),
-      waktu:    Number(waktu),
-      device,
-      namaAlat: namaAlat ?? "",
-      status:   "running",
-    }).save();
-
-    res.json({
-      status:  "success",
-      message: "Perintah start berhasil dikirim ke alat",
-      data:    sesi,
-    });
-
+    res.json({ status: "success", message: `Perintah ${action || "start"} berhasil dikirim` });
   } catch (error) {
-    res.status(500).json({
-      status:  "error",
-      message: error.message,
-    });
+    res.status(500).json({ status: "error", message: error.message });
   }
 });
 
 // ── GET /sterilisasi/set ──────────────────────────────────────
-// Frontend ambil data sesi terbaru dari DB
-router.get("/set", async (req, res) => {
+router.get("/set", async (_req, res) => {
   try {
-    const data = await Sesi.find().sort({ createdAt: -1 }).limit(50);
+    const data = await Set.find().sort({ createdAt: -1 }).limit(50);
     res.json({ status: "success", data });
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
   }
 });
 
-<<<<<<< Updated upstream
-// ── GET /sterilisasi/sensor ───────────────────────────────────
-// Frontend ambil data sensor realtime terbaru
-router.get("/sensor", async (req, res) => {
-=======
 // ── GET /sterilisasi/set/last ─────────────────────────────────
-// Ambil 1 data set paling baru
-router.get("/set/last", async (req, res) => {
+router.get("/set/last", async (_req, res) => {
   try {
     const last = await Set.findOne().sort({ createdAt: -1 });
     res.json({ status: "success", data: last });
@@ -89,22 +50,15 @@ router.get("/set/last", async (req, res) => {
 });
 
 // ── GET /sterilisasi/running ──────────────────────────────────
-// Frontend ambil data dari collection Running (topik sterilisasi/running)
-router.get("/running", async (req, res) => {
->>>>>>> Stashed changes
+router.get("/running", async (_req, res) => {
   try {
-    const data = await Sensor.find().sort({ createdAt: -1 }).limit(50);
+    const data = await Running.find().sort({ createdAt: -1 }).limit(50);
     res.json({ status: "success", data });
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
   }
 });
 
-<<<<<<< Updated upstream
-// ── GET /sterilisasi/sensor/last ──────────────────────────────
-// Ambil 1 data sensor paling baru (untuk monitoring realtime di frontend)
-router.get("/sensor/last", async (req, res) => {
-=======
 // ── POST /sterilisasi/running ─────────────────────────────────
 // Frontend kirim perintah stop → publish ke topik sterilisasi/running
 router.post("/running", async (req, res) => {
@@ -112,10 +66,7 @@ router.post("/running", async (req, res) => {
     const { action, device } = req.body;
 
     if (!device) {
-      return res.status(400).json({
-        status:  "error",
-        message: "Field device wajib diisi",
-      });
+      return res.status(400).json({ status: "error", message: "Field device wajib diisi" });
     }
 
     const mqttPayload = {
@@ -125,35 +76,24 @@ router.post("/running", async (req, res) => {
 
     await mqttClient.publishRunning(mqttPayload);
 
-    res.json({
-      status:  "success",
-      message: `Perintah ${action || 'stop'} berhasil dikirim ke topik running`,
-    });
+    res.json({ status: "success", message: `Perintah ${action || "stop"} berhasil dikirim ke topik running` });
   } catch (error) {
-    res.status(500).json({
-      status:  "error",
-      message: error.message,
-    });
+    res.status(500).json({ status: "error", message: error.message });
   }
 });
 
 // ── GET /sterilisasi/running/last ─────────────────────────────
-// Ambil 1 data running paling baru
-router.get("/running/last", async (req, res) => {
->>>>>>> Stashed changes
+router.get("/running/last", async (_req, res) => {
   try {
-    const last = await Sensor.findOne().sort({ createdAt: -1 });
+    const last = await Running.findOne().sort({ createdAt: -1 });
     res.json({ status: "success", data: last });
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
   }
 });
 
-<<<<<<< Updated upstream
-=======
 // ── GET /sterilisasi/finish ───────────────────────────────────
-// Frontend ambil data dari collection Finish (topik sterilisasi/finish)
-router.get("/finish", async (req, res) => {
+router.get("/finish", async (_req, res) => {
   try {
     const data = await Finish.find().sort({ createdAt: -1 }).limit(50);
     res.json({ status: "success", data });
@@ -163,8 +103,8 @@ router.get("/finish", async (req, res) => {
 });
 
 // ── GET /sterilisasi/finish/last ──────────────────────────────
-// Ambil 1 data finish paling baru dan CONSUME (hapus setelah dibaca)
-router.get("/finish/last", async (req, res) => {
+// Ambil data finish dari memory dan CONSUME setelah dibaca
+router.get("/finish/last", async (_req, res) => {
   try {
     const lastFinish = mqttClient.getLastFinishData();
 
@@ -172,7 +112,7 @@ router.get("/finish/last", async (req, res) => {
       return res.json({ status: "success", data: null });
     }
 
-    // Simpan dulu sebelum di-consume, lalu kirim ke frontend
+    // Copy dulu sebelum di-consume agar tidak hilang karena race condition
     const dataToSend = { ...lastFinish };
     mqttClient.consumeFinish();
 
@@ -180,12 +120,8 @@ router.get("/finish/last", async (req, res) => {
 
     res.json({ status: "success", data: dataToSend });
   } catch (error) {
-    res.status(500).json({
-      status:  "error",
-      message: error.message,
-    });
+    res.status(500).json({ status: "error", message: error.message });
   }
 });
 
->>>>>>> Stashed changes
 module.exports = router;
