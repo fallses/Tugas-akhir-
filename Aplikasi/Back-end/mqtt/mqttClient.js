@@ -34,6 +34,7 @@ const client = mqtt.connect(broker);
 
 let lastData       = null;
 let lastFinishData = null;
+let finishConsumed = false;  // flag agar tidak di-consume dua kali sekaligus
 
 client.on("connect", () => {
   console.log("MQTT Terhubung ✅ →", broker);
@@ -72,6 +73,12 @@ client.on("message", async (receivedTopic, message) => {
       waktu:   data.waktu   ?? fallbackWaktu,
       device:  data.Device  ?? data.device ?? null,
     };
+<<<<<<< Updated upstream
+=======
+    
+    lastFinishData = finishData;
+    finishConsumed = false;   // reset flag saat data baru masuk
+>>>>>>> Stashed changes
     console.log("lastFinishData diperbarui:", lastFinishData);
 
     try {
@@ -131,6 +138,32 @@ module.exports = {
   getLastData:        () => lastData,
   consumeAction:      () => { if (lastData) lastData.action = null; },
   getLastFinishData:  () => lastFinishData,
-  consumeFinish:      () => { lastFinishData = null; },
+  consumeFinish:      () => { lastFinishData = null; finishConsumed = true; },
+  isFinishConsumed:   () => finishConsumed,
   PUBLISH_TOPIC,
+<<<<<<< Updated upstream
+=======
+  publishSet: (payload) => {
+    return new Promise((resolve, reject) => {
+      client.publish(PUBLISH_TOPIC, JSON.stringify(payload), (err) => {
+        if (err) reject(err);
+        else {
+          console.log(`[PUBLISH] ${PUBLISH_TOPIC}:`, JSON.stringify(payload));
+          resolve();
+        }
+      });
+    });
+  },
+  publishRunning: (payload) => {
+    return new Promise((resolve, reject) => {
+      client.publish(SUBSCRIBE_TOPIC, JSON.stringify(payload), (err) => {
+        if (err) reject(err);
+        else {
+          console.log(`[PUBLISH] ${SUBSCRIBE_TOPIC}:`, JSON.stringify(payload));
+          resolve();
+        }
+      });
+    });
+  },
+>>>>>>> Stashed changes
 };

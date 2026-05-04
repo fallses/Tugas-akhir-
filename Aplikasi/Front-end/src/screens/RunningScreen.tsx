@@ -29,7 +29,12 @@ import sharedStyles, {
   bottomStyles,
 } from '../styles/ProcessScreen.styles';
 import { ProcessParams } from '../types/process';
+<<<<<<< Updated upstream
 import { sendStop } from '../services/backendService';
+=======
+import { sendStop, fetchLastRunning, fetchLastSet } from '../services/backendService';
+import { POLL_INTERVAL_MS } from '../config';
+>>>>>>> Stashed changes
 
 const PHASES = [
   { key: 'set',       label: 'SET',     color: COLORS.accent },
@@ -53,6 +58,23 @@ export default function RunningScreen({ route, navigation }: Props) {
   const remainingRef = useRef(sterilDetik);
   const [stopping, setStopping] = useState(false);
 
+<<<<<<< Updated upstream
+=======
+  // Suhu & tekanan real-time dari database (topik running)
+  const [realtimeSuhu,    setRealtimeSuhu]    = useState<number | null>(null);
+  const [realtimeTekanan, setRealtimeTekanan] = useState<number | null>(null);
+  const [realtimeLoading, setRealtimeLoading] = useState(true);
+
+  // Suhu & tekanan target dari database (topik set — yang dikirim saat start)
+  const [setSuhu,    setSetSuhu]    = useState<string>(inputSuhu);
+  const [setTekanan, setSetTekanan] = useState<string>(inputTekanan);
+
+  // Total detik untuk progress bar — diupdate saat timer di-sync dari alat
+  const totalDetikRef    = useRef(sterilDetik);
+  // Sudah dapat waktu dari alat sekali atau belum
+  const timerSyncedRef   = useRef(false);
+
+>>>>>>> Stashed changes
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeIn    = useRef(new Animated.Value(0)).current;
 
@@ -85,6 +107,64 @@ export default function RunningScreen({ route, navigation }: Props) {
     return () => clearInterval(tick);
   }, []);
 
+<<<<<<< Updated upstream
+=======
+  // Polling real-time suhu & tekanan dari /sterilisasi/running/last
+  // Juga ambil waktu dari alat untuk sinkronisasi timer (sekali saja)
+  useEffect(() => {
+    async function pollRealtime() {
+      try {
+        const res = await fetchLastRunning();
+        if (res.status === 'success' && res.data) {
+          const { suhu, tekanan, waktu } = res.data;
+          if (suhu    != null) setRealtimeSuhu(suhu);
+          if (tekanan != null) setRealtimeTekanan(tekanan);
+
+          // Sinkronisasi timer dari waktu yang dikirim alat (hanya sekali)
+          if (!timerSyncedRef.current && waktu != null) {
+            const parts = String(waktu).split(':');
+            if (parts.length === 2) {
+              const secs = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+              if (!isNaN(secs) && secs > 0) {
+                setRemainingSeconds(secs);
+                remainingRef.current   = secs;
+                totalDetikRef.current  = secs;   // simpan sebagai total untuk progress
+                timerSyncedRef.current = true;
+                console.log(`[RunningScreen] Timer di-sync dari alat: ${waktu} → ${secs} detik`);
+              }
+            }
+          }
+        }
+      } catch {
+        // Gagal polling — coba lagi di interval berikutnya
+      } finally {
+        setRealtimeLoading(false);
+      }
+    }
+
+    pollRealtime();
+    const interval = setInterval(pollRealtime, POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Ambil suhu & tekanan target dari /sterilisasi/set/last (sekali saat masuk)
+  useEffect(() => {
+    async function loadSetData() {
+      try {
+        const res = await fetchLastSet();
+        if (res.status === 'success' && res.data) {
+          const { suhu, tekanan } = res.data;
+          if (suhu    != null) setSetSuhu(suhu.toString());
+          if (tekanan != null) setSetTekanan(tekanan.toString());
+        }
+      } catch {
+        // Gagal — tetap pakai nilai dari route.params
+      }
+    }
+    loadSetData();
+  }, []);
+
+>>>>>>> Stashed changes
   async function handleStop() {
     setStopping(true);
     try {
@@ -104,8 +184,8 @@ export default function RunningScreen({ route, navigation }: Props) {
     return `${mm}:${ss}`;
   }
 
-  const progress = sterilDetik > 0
-    ? Math.min(1 - remainingSeconds / sterilDetik, 1)
+  const progress = totalDetikRef.current > 0
+    ? Math.min(1 - remainingSeconds / totalDetikRef.current, 1)
     : 0;
   const pct = Math.round(progress * 100);
 
@@ -175,10 +255,28 @@ export default function RunningScreen({ route, navigation }: Props) {
                 <Text style={runningStyles.statValue}>{inputSuhu}°C</Text>
                 <Text style={runningStyles.statLabel}>Suhu</Text>
               </View>
+<<<<<<< Updated upstream
               <View style={runningStyles.statCard}>
                 <MaterialCommunityIcons name="gauge" size={20} color={COLORS.accent} />
                 <Text style={runningStyles.statValue}>{inputTekanan} bar</Text>
                 <Text style={runningStyles.statLabel}>Tekanan</Text>
+=======
+
+              {/* Garis pemisah */}
+              <View style={runningStyles.monitorSeparator} />
+
+              {/* Baris bawah — target dari menu Set */}
+              <View style={runningStyles.monitorRow}>
+                <View style={runningStyles.monitorCol}>
+                  <Text style={runningStyles.monitorLabel}>Suhu Set</Text>
+                  <Text style={runningStyles.monitorValueSub}>{setSuhu}°C</Text>
+                </View>
+                <View style={runningStyles.monitorDivider} />
+                <View style={runningStyles.monitorCol}>
+                  <Text style={runningStyles.monitorLabel}>Tekanan Set</Text>
+                  <Text style={runningStyles.monitorValueSub}>{setTekanan} bar</Text>
+                </View>
+>>>>>>> Stashed changes
               </View>
             </View>
             <View style={runningStyles.progressTrack}>

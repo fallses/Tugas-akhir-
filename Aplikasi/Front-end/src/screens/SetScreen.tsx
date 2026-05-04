@@ -119,9 +119,15 @@ export default function SetScreen({ route, navigation }: Props) {
     // Update params agar App.tsx punya data terbaru saat navigate
     setActiveProcessParams(buildParams());
     setWaitingForBackend(true);
+
+    // Format waktu dari input user: "HH:MM"
+    const jam   = parseInt(inputJam,   10) || 0;
+    const menit = parseInt(inputMenit, 10) || 0;
+    const waktuSet = `${jam.toString().padStart(2, '0')}:${menit.toString().padStart(2, '0')}`;
+
     // Kirim perintah start ke backend → backend publish ke sterilisasi/set
     try {
-      await sendStart({ suhu: inputSuhu, tekanan: inputTekanan, device: idAlat });
+      await sendStart({ suhu: inputSuhu, tekanan: inputTekanan, device: idAlat, waktu: waktuSet });
     } catch {
       // Gagal kirim — tetap tampilkan loading, user bisa batalkan
     }
