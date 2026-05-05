@@ -2,14 +2,15 @@ import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
-  SafeAreaView,
   StatusBar,
   TouchableOpacity,
   Pressable,
   ScrollView,
   Modal,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -19,12 +20,24 @@ import {
   filterStyles,
   detailModalStyles,
 } from '../styles/HistoryScreen.styles';
-import { globalHistory, HistoryEntry as SharedHistoryEntry } from '../types/process';
+import { fetchHistory, HistoryData } from '../services/backendService';
 
 // ─────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────
-export type HistoryEntry = SharedHistoryEntry;
+export interface HistoryEntry {
+  id:           string;
+  namaAlat:     string;
+  idAlat:       string;
+  suhu:         number;
+  tekanan:      number;
+  durasi:       string;
+  tanggal:      string;
+  mulaiPukul:   string;
+  selesaiPukul: string;
+  status:       'Berhasil' | 'Dihentikan';
+  notes?:       string;
+}
 
 type FilterType = 'Semua' | 'Berhasil' | 'Dihentikan';
 
@@ -40,6 +53,49 @@ interface Props {
 // ─────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────
+function convertHistoryDataToEntry(data: HistoryData[]): HistoryEntry[] {
+  return data.map((item, index) => {
+    const createdAt = item.createdAt ? new Date(item.createdAt) : new Date();
+    const tanggal = createdAt.toLocaleDateString('id-ID', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    });
+    const selesaiPukul = createdAt.toLocaleTimeString('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    
+    // Hitung mulai pukul dari waktu durasi (dari set)
+    let mulaiPukul = selesaiPukul;
+    if (item.waktu) {
+      const parts = item.waktu.split(':');
+      if (parts.length === 2) {
+        const durasiMenit = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+        const mulaiTime = new Date(createdAt.getTime() - durasiMenit * 60 * 1000);
+        mulaiPukul = mulaiTime.toLocaleTimeString('id-ID', {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+      }
+    }
+
+    return {
+      id: item._id ?? `history-${index}`,
+      namaAlat: item.device ?? 'Unknown Device',
+      idAlat: item.device ?? '-',
+      suhu: item.suhu ?? 0,              // dari set
+      tekanan: item.tekanan ?? 0,        // dari set
+      durasi: item.waktu ?? '00:00',     // dari set
+      tanggal,
+      mulaiPukul,
+      selesaiPukul,
+      status: 'Berhasil' as const,
+      notes: '',
+    };
+  });
+}
+
 function groupByDate(entries: HistoryEntry[]): { label: string; items: HistoryEntry[] }[] {
   const map = new Map<string, HistoryEntry[]>();
   for (const e of entries) {
@@ -62,15 +118,37 @@ function statusIcon(status: HistoryEntry['status']): string {
 // Main Component
 // ─────────────────────────────────────────────────────────
 export default function HistoryScreen({ route, navigation }: Props) {
-  // Selalu baca dari globalHistory agar data selalu fresh
-  const [entries, setEntries] = useState<HistoryEntry[]>([...globalHistory]);
+  const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [filter, setFilter]   = useState<FilterType>('Semua');
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState<string | null>(null);
+
+  // Fetch data dari backend
+  const loadHistory = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetchHistory();
+      if (res.status === 'success' && res.data) {
+        const converted = convertHistoryDataToEntry(res.data);
+        setEntries(converted);
+      } else {
+        setEntries([]);
+      }
+    } catch (err) {
+      console.error('[HistoryScreen] Error loading history:', err);
+      setError('Gagal memuat riwayat');
+      setEntries([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   // Refresh data setiap kali screen difokuskan
   useFocusEffect(
     useCallback(() => {
-      setEntries([...globalHistory]);
-    }, [])
+      loadHistory();
+    }, [loadHistory])
   );
 
   // Detail modal
@@ -98,8 +176,6 @@ export default function HistoryScreen({ route, navigation }: Props) {
     const updated = entries.map(e =>
       e.id === selected.id ? { ...e, notes: notesText } : e
     );
-    // Update globalHistory juga agar perubahan persisten selama sesi
-    globalHistory.splice(0, globalHistory.length, ...updated);
     setEntries(updated);
     setSelected(prev => prev ? { ...prev, notes: notesText } : prev);
     setEditingNotes(false);
@@ -175,6 +251,33 @@ export default function HistoryScreen({ route, navigation }: Props) {
   }
 
   function renderEmpty() {
+    if (loading) {
+      return (
+        <View style={listStyles.emptyWrapper}>
+          <ActivityIndicator size="large" color={COLORS.accent} />
+          <Text style={listStyles.emptySubtitle}>Memuat riwayat...</Text>
+        </View>
+      );
+    }
+
+    if (error) {
+      return (
+        <View style={listStyles.emptyWrapper}>
+          <View style={listStyles.emptyIconRing}>
+            <MaterialCommunityIcons name="alert-circle-outline" size={40} color={COLORS.danger} />
+          </View>
+          <Text style={listStyles.emptyTitle}>Gagal Memuat</Text>
+          <Text style={listStyles.emptySubtitle}>{error}</Text>
+          <TouchableOpacity
+            style={{ marginTop: 16, paddingHorizontal: 20, paddingVertical: 10, backgroundColor: COLORS.accent, borderRadius: 8 }}
+            onPress={loadHistory}
+          >
+            <Text style={{ color: COLORS.bg, fontWeight: '600' }}>Coba Lagi</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
     return (
       <View style={listStyles.emptyWrapper}>
         <View style={listStyles.emptyIconRing}>
@@ -224,7 +327,7 @@ export default function HistoryScreen({ route, navigation }: Props) {
   }
 
   function renderList() {
-    if (filtered.length === 0) return renderEmpty();
+    if (loading || error || filtered.length === 0) return renderEmpty();
     return (
       <ScrollView
         style={listStyles.container}

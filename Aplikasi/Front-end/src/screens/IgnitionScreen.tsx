@@ -20,11 +20,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
-  SafeAreaView,
   StatusBar,
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Animated } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import sharedStyles, {
@@ -221,25 +221,12 @@ export default function IgnitionScreen({ route, navigation }: Props) {
                 : `Mencoba menyalakan kompor... (Sesi ${sesi}/${MAX_SESI})`}
             </Text>
 
-            {/* Progress bar */}
-            <View style={ignitionStyles.barTrack}>
-              <Animated.View style={[
-                ignitionStyles.barFill,
-                {
-                  width: barWidth,
-                  backgroundColor: apiMenyala ? COLORS.fire : COLORS.accent,
-                },
-              ]} />
-            </View>
-
-            {/* Status label */}
-            <Text style={[ignitionStyles.barLabel, { color: apiMenyala ? COLORS.fire : COLORS.muted }]}>
-              {apiMenyala
-                ? '✓ Berhasil — menunggu konfirmasi berikutnya'
-                : sesi > 1
-                  ? `Percobaan ${sesi} dari ${MAX_SESI}`
-                  : 'Menginisialisasi sistem'}
-            </Text>
+            {/* Status label - hanya tampil saat api menyala */}
+            {apiMenyala && (
+              <Text style={[ignitionStyles.barLabel, { color: COLORS.fire }]}>
+                ✓ Berhasil — menunggu konfirmasi berikutnya
+              </Text>
+            )}
 
             {/* Sesi indicator dots */}
             <View style={{ flexDirection: 'row', gap: 8, marginTop: 24 }}>

@@ -123,7 +123,7 @@ client.on("message", async (receivedTopic, message) => {
     return;
   }
 
-  const validActions = ["countdown", "running", "ignition"];
+  const validActions = ["countdown", "running", "ignition", "stop"];
   if (!validActions.includes(action)) {
     console.warn("Action tidak dikenali:", action);
     return;
@@ -163,6 +163,19 @@ module.exports = {
   consumeFinish:     () => { lastFinishData = null; finishConsumed = true; },
   isFinishConsumed:  () => finishConsumed,
   PUBLISH_TOPIC,
+  updateLastDataWithStop: (device) => {
+    lastData = {
+      action:  "stop",
+      suhu:    null,
+      tekanan: null,
+      waktu:   null,
+      timer:   null,
+      device:  device ?? null,
+      sesi:    null,
+      status:  null,
+    };
+    console.log("[MQTT] lastData diperbarui dengan action stop (dari frontend):", lastData);
+  },
   publishSet: (payload) => {
     return new Promise((resolve, reject) => {
       client.publish(PUBLISH_TOPIC, JSON.stringify(payload), (err) => {

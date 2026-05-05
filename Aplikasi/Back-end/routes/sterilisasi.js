@@ -76,6 +76,11 @@ router.post("/running", async (req, res) => {
 
     await mqttClient.publishRunning(mqttPayload);
 
+    // Update lastData langsung agar frontend bisa detect stop
+    if (action === "stop" || !action) {
+      mqttClient.updateLastDataWithStop(device);
+    }
+
     res.json({ status: "success", message: `Perintah ${action || "stop"} berhasil dikirim ke topik running` });
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
@@ -95,8 +100,44 @@ router.get("/running/last", async (_req, res) => {
 // ── GET /sterilisasi/finish ───────────────────────────────────
 router.get("/finish", async (_req, res) => {
   try {
-    const data = await Finish.find().sort({ createdAt: -1 }).limit(50);
+    const data = await Finish.find().sort({ createdAt: -1 }).limit(100);
     res.json({ status: "success", data });
+  } catch (error) {
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+// ── GET /sterilisasi/history ──────────────────────────────────
+// Menggabungkan data finish dengan set untuk history lengkap
+router.get("/history", async (_req, res) => {
+  try {
+    const finishData = await Finish.find().sort({ createdAt: -1 }).limit(100);
+    
+    // Untuk setiap finish, cari set yang sesuai (device sama, waktu berdekatan)
+    const history = await Promise.all(
+      finishData.map(async (finish) => {
+        // Cari set dengan device yang sama dan waktu dalam rentang 2 jam sebelum finish
+        const timeWindow = new Date(finish.createdAt.getTime() - 2 * 60 * 60 * 1000);
+        const matchingSet = await Set.findOne({
+          device: finish.device,
+          action: "start",
+          createdAt: { $gte: timeWindow, $lte: finish.createdAt }
+        }).sort({ createdAt: -1 });
+
+        return {
+          _id: finish._id,
+          device: finish.device,
+          suhu: matchingSet?.suhu ?? finish.suhu ?? 0,
+          tekanan: matchingSet?.tekanan ?? finish.tekanan ?? 0,
+          waktu: matchingSet?.waktu ?? finish.waktu ?? "00:00",
+          finishSuhu: finish.suhu,
+          finishTekanan: finish.tekanan,
+          createdAt: finish.createdAt,
+        };
+      })
+    );
+
+    res.json({ status: "success", data: history });
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
   }

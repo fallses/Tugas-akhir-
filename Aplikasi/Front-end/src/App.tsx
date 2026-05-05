@@ -147,6 +147,19 @@ export default function App() {
             break;
           }
 
+          case 'stop': {
+            // Proses dihentikan — kembali ke SetScreen
+            console.log('[App] Proses dihentikan, kembali ke SetScreen');
+            nav.reset({
+              index: 1,
+              routes: [
+                { name: 'Dashboard' },
+                { name: 'SetScreen', params },
+              ],
+            });
+            break;
+          }
+
           default:
             console.warn(`[App] Action tidak dikenali: "${action}"`);
             break;

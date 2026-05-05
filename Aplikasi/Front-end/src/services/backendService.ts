@@ -7,6 +7,7 @@ export interface RunningData {
   suhu:    number | null;
   tekanan: number | null;
   waktu:   string | null;
+  timer:   string | null; // Timer dari alat (format: "HH:MM:SS")
   device:  string | null;
   sesi:    string | null;
   status:  string | null;
@@ -34,15 +35,39 @@ export interface SetResponse {
 
 // ── Tipe data dari sterilisasi/finish ────────────────────────
 export interface FinishData {
+  _id?:    string;
   suhu:    number | null;
   tekanan: number | null;
   waktu:   string | null;
   device:  string | null;
+  createdAt?: string;
 }
 
 export interface FinishResponse {
   status: string;
   data:   FinishData | null;
+}
+
+export interface FinishListResponse {
+  status: string;
+  data:   FinishData[];
+}
+
+// ── Tipe data untuk history (gabungan finish + set) ──────────
+export interface HistoryData {
+  _id:           string;
+  device:        string | null;
+  suhu:          number;      // dari set
+  tekanan:       number;      // dari set
+  waktu:         string;      // dari set (durasi)
+  finishSuhu:    number | null;    // suhu akhir dari finish
+  finishTekanan: number | null;    // tekanan akhir dari finish
+  createdAt:     string;
+}
+
+export interface HistoryResponse {
+  status: string;
+  data:   HistoryData[];
 }
 
 /**
@@ -78,6 +103,32 @@ export async function fetchLastSet(): Promise<SetResponse> {
  */
 export async function fetchLastFinish(): Promise<FinishResponse> {
   const res = await fetch(`${BACKEND_URL}/sterilisasi/finish/last`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Ambil semua data finish dari database untuk history.
+ * Endpoint: GET /sterilisasi/finish
+ */
+export async function fetchFinishHistory(): Promise<FinishListResponse> {
+  const res = await fetch(`${BACKEND_URL}/sterilisasi/finish`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Ambil data history lengkap (gabungan finish + set).
+ * Endpoint: GET /sterilisasi/history
+ */
+export async function fetchHistory(): Promise<HistoryResponse> {
+  const res = await fetch(`${BACKEND_URL}/sterilisasi/history`, {
     method: 'GET',
     headers: { 'Content-Type': 'application/json' },
   });

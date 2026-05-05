@@ -4,7 +4,7 @@
  * Tampilan sterilisasi berjalan.
  * - Baris atas card: suhu & tekanan REAL-TIME dari database (polling /running/last)
  * - Baris bawah card: suhu & tekanan TARGET dari /set/last (sekali saat masuk)
- * - Timer: di-sync dari field waktu yang dikirim alat (sekali saat pertama kali data masuk)
+ * - Timer: REAL-TIME dari field timer yang dikirim alat (format "HH:MM:SS")
  *
  * Perpindahan ke FinishScreen HANYA terjadi saat backend mengirim sinyal finish.
  */
@@ -13,12 +13,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
-  SafeAreaView,
   StatusBar,
   TouchableOpacity,
   ActivityIndicator,
   BackHandler,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Animated } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import sharedStyles, {
@@ -49,9 +49,7 @@ export default function RunningScreen({ route, navigation }: Props) {
   const { namaAlat, idAlat, sterilDetik, inputSuhu, inputTekanan } = route.params;
 
   const [remainingSeconds, setRemainingSeconds] = useState(sterilDetik);
-  const remainingRef   = useRef(sterilDetik);
-  const totalDetikRef  = useRef(sterilDetik);   // untuk progress bar
-  const timerSyncedRef = useRef(false);          // sync timer dari alat hanya sekali
+  const [totalSeconds, setTotalSeconds] = useState(sterilDetik); // Total durasi untuk progress bar
   const [stopping, setStopping] = useState(false);
 
   // Suhu & tekanan real-time dari database (topik running)
@@ -65,6 +63,7 @@ export default function RunningScreen({ route, navigation }: Props) {
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeIn    = useRef(new Animated.Value(0)).current;
+  const initialTimerSet = useRef(false); // Flag untuk set total durasi sekali saja
 
   // Tombol back hardware → reset stack ke SetScreen
   useEffect(() => {
@@ -98,39 +97,33 @@ export default function RunningScreen({ route, navigation }: Props) {
     return () => pulse.stop();
   }, [pulseAnim]);
 
-  // Timer mundur — hanya visual
-  useEffect(() => {
-    const tick = setInterval(() => {
-      setRemainingSeconds(s => {
-        const next = Math.max(s - 1, 0);
-        remainingRef.current = next;
-        return next;
-      });
-    }, 1000);
-    return () => clearInterval(tick);
-  }, []);
-
-  // Polling real-time suhu & tekanan + sync timer dari alat (sekali)
+  // Polling real-time suhu, tekanan & timer dari alat
   useEffect(() => {
     async function pollRealtime() {
       try {
         const res = await fetchLastRunning();
         if (res.status === 'success' && res.data) {
-          const { suhu, tekanan, waktu } = res.data;
+          const { suhu, tekanan, timer } = res.data;
           if (suhu    != null) setRealtimeSuhu(suhu);
           if (tekanan != null) setRealtimeTekanan(tekanan);
 
-          // Sync timer dari waktu alat — hanya sekali
-          if (!timerSyncedRef.current && waktu != null) {
-            const parts = String(waktu).split(':');
-            if (parts.length === 2) {
-              const secs = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
-              if (!isNaN(secs) && secs > 0) {
+          // Update timer dari alat secara realtime (format "HH:MM:SS")
+          if (timer != null) {
+            const parts = String(timer).split(':');
+            if (parts.length === 3) {
+              const h = parseInt(parts[0], 10);
+              const m = parseInt(parts[1], 10);
+              const s = parseInt(parts[2], 10);
+              const secs = h * 3600 + m * 60 + s;
+              if (!isNaN(secs) && secs >= 0) {
                 setRemainingSeconds(secs);
-                remainingRef.current  = secs;
-                totalDetikRef.current = secs;
-                timerSyncedRef.current = true;
-                console.log(`[RunningScreen] Timer sync: ${waktu} → ${secs}s`);
+                
+                // Set total durasi hanya sekali (saat pertama kali dapat timer dari alat)
+                if (!initialTimerSet.current) {
+                  setTotalSeconds(secs);
+                  initialTimerSet.current = true;
+                  console.log(`[RunningScreen] Total durasi diset: ${secs}s dari timer alat`);
+                }
               }
             }
           }
@@ -189,8 +182,8 @@ export default function RunningScreen({ route, navigation }: Props) {
     return `${mm}:${ss}`;
   }
 
-  const progress = totalDetikRef.current > 0
-    ? Math.min(1 - remainingSeconds / totalDetikRef.current, 1)
+  const progress = totalSeconds > 0
+    ? Math.max(0, Math.min(1 - remainingSeconds / totalSeconds, 1))
     : 0;
   const pct = Math.round(progress * 100);
   const timerDone = remainingSeconds <= 0;
