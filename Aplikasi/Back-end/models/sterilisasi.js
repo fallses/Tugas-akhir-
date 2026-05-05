@@ -20,6 +20,7 @@ const runningSchema = new mongoose.Schema({
   suhu:     { type: Number },
   tekanan:  { type: Number },
   waktu:    { type: mongoose.Schema.Types.Mixed },
+  timer:    { type: String }, // Timer dari alat (format: "00:00:00")
   device:   { type: String },
   sesi:     { type: String },
   status:   { type: String },

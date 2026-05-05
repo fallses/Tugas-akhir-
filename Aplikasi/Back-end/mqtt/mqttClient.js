@@ -26,6 +26,8 @@ const client = mqtt.connect(broker);
 let lastData       = null;
 let lastFinishData = null;
 let finishConsumed = false;
+let finishTimestamp = null; // Timestamp kapan finish diterima
+const FINISH_LOCK_DURATION = 5000; // 5 detik setelah finish, abaikan running
 
 client.on("connect", () => {
   console.log("MQTT Terhubung ✅ →", broker);
@@ -58,9 +60,6 @@ client.on("message", async (receivedTopic, message) => {
     return;
   }
 
-  const now = new Date();
-  const fallbackWaktu = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
-
   // ── Topik sterilisasi/set ─────────────────────────────────
   if (receivedTopic === SET_TOPIC) {
     const action = data.action ?? null;
@@ -88,11 +87,26 @@ client.on("message", async (receivedTopic, message) => {
     lastFinishData = {
       suhu:    data.suhu    ?? null,
       tekanan: data.tekanan ?? null,
-      waktu:   data.waktu   ?? fallbackWaktu,
+      waktu:   data.waktu   ?? null, // Tidak menggunakan fallback
       device:  data.Device  ?? data.device ?? null,
     };
     finishConsumed = false;
+    finishTimestamp = Date.now(); // Catat waktu finish diterima
     console.log("lastFinishData diperbarui:", lastFinishData);
+    
+    // Update lastData juga agar frontend bisa detect action finish
+    lastData = {
+      action:  "finish",
+      suhu:    data.suhu    ?? null,
+      tekanan: data.tekanan ?? null,
+      waktu:   data.waktu   ?? null,
+      timer:   null,
+      device:  data.Device  ?? data.device ?? null,
+      sesi:    null,
+      status:  null,
+    };
+    console.log("lastData diperbarui dengan action finish:", lastData);
+    
     try {
       await new Finish(lastFinishData).save();
       console.log("[sterilisasi/finish] Disimpan ke collection Finish");
@@ -115,11 +129,18 @@ client.on("message", async (receivedTopic, message) => {
     return;
   }
 
+  // WORKAROUND: Abaikan data running jika baru saja menerima finish (dalam 5 detik)
+  if (action === "running" && finishTimestamp && (Date.now() - finishTimestamp < FINISH_LOCK_DURATION)) {
+    console.warn(`[WORKAROUND] Data running diabaikan karena finish baru diterima ${Date.now() - finishTimestamp}ms yang lalu`);
+    return;
+  }
+
   lastData = {
     action,
     suhu:    data.suhu    ?? null,
     tekanan: data.tekanan ?? null,
-    waktu:   data.waktu   ?? fallbackWaktu,
+    waktu:   data.waktu   ?? null, // Tidak menggunakan fallback, biarkan null jika tidak ada
+    timer:   data.timer   ?? null, // Timer dari alat (format: "00:00:00")
     device:  data.Device  ?? data.device ?? null,
     sesi:    data.sesi    ?? null,
     status:  data.status  ?? null,
