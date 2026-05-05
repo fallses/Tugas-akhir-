@@ -85,7 +85,7 @@ export default function App() {
 
         if (res.status !== 'success' || !res.data) return;
 
-        const { _id, action, suhu, tekanan, sesi, status } = res.data;
+        const { _id, action, suhu, tekanan, sesi, status, device } = res.data;
         if (!action) return;
 
         // Sudah diproses sebelumnya → skip
@@ -98,8 +98,8 @@ export default function App() {
         console.log(`[App] Running action diterima: "${action}" (id: ${_id})`);
 
         const params = activeProcessParams ?? {
-          namaAlat:     '-',
-          idAlat:       '-',
+          namaAlat:     device ?? 'Unknown Device',
+          idAlat:       device ?? '-',
           sterilDetik:  20 * 60,
           inputSuhu:    suhu?.toString()     ?? '121',
           inputTekanan: tekanan?.toString()  ?? '1.2',
