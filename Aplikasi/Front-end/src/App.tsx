@@ -147,6 +147,25 @@ export default function App() {
             break;
           }
 
+          case 'ignition_failed': {
+            // Gagal menyalakan kompor setelah beberapa percobaan
+            console.log('[App] Ignition failed, tampilkan error screen');
+            // Backend mengirim percobaan di field sesi
+            const percobaan = sesi ? parseInt(sesi, 10) : 3;
+            const failedParams = {
+              ...params,
+              sesi: percobaan,
+              ignitionStatus: 'gagal' as const,
+            };
+            const currentRoute = nav.getCurrentRoute();
+            if (currentRoute?.name === 'IgnitionScreen') {
+              nav.setParams(failedParams);
+            } else {
+              nav.navigate('IgnitionScreen', failedParams);
+            }
+            break;
+          }
+
           case 'stop': {
             // Proses dihentikan — kembali ke SetScreen
             console.log('[App] Proses dihentikan, kembali ke SetScreen');

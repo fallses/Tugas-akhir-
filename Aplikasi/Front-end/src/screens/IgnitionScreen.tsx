@@ -23,6 +23,7 @@ import {
   StatusBar,
   TouchableOpacity,
   ActivityIndicator,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Animated } from 'react-native';
@@ -51,7 +52,7 @@ interface Props {
   route: {
     params: ProcessParams & {
       sesi: number;
-      ignitionStatus: 'prosesing' | 'api menyala';
+      ignitionStatus: 'prosesing' | 'api menyala' | 'gagal';
     };
   };
   navigation: any;
@@ -65,6 +66,7 @@ export default function IgnitionScreen({ route, navigation }: Props) {
   const ignitionStatus = route.params.ignitionStatus ?? 'prosesing';
 
   const apiMenyala = ignitionStatus === 'api menyala';
+  const gagal      = ignitionStatus === 'gagal';
 
   // Apakah sesi 3 api menyala sudah tercapai → tampilkan loading tunggu action berikutnya
   const waitingNext = sesi >= MAX_SESI && apiMenyala;
@@ -75,8 +77,20 @@ export default function IgnitionScreen({ route, navigation }: Props) {
   const fadeIn    = useRef(new Animated.Value(0)).current;
   const barAnim   = useRef(new Animated.Value(0)).current;
 
+  // Blokir tombol back hardware - user harus stop atau tunggu selesai
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Return true = block back button
+      return true;
+    });
+    return () => sub.remove();
+  }, []);
+
   // Jalankan ulang animasi setiap kali sesi atau status berubah
   useEffect(() => {
+    // Jangan jalankan animasi jika gagal
+    if (gagal) return;
+
     // Fade in
     fadeIn.setValue(0);
     Animated.timing(fadeIn, { toValue: 1, duration: 300, useNativeDriver: true }).start();
@@ -157,18 +171,116 @@ export default function IgnitionScreen({ route, navigation }: Props) {
 
       {/* Top bar */}
       <View style={topBarStyles.container}>
-        <View style={{ width: 40 }} />
+        <View style={{ width: 80 }} />
         <View style={topBarStyles.titleBlock}>
           <Text style={topBarStyles.title}>{namaAlat}</Text>
           <Text style={topBarStyles.subtitle}>ID: {idAlat}</Text>
         </View>
-        <View style={{ width: 40 }} />
+        <View style={{ width: 80 }} />
       </View>
 
       {renderSteps()}
 
       {/* Konten utama */}
-      {waitingNext ? (
+      {gagal ? (
+        /* Gagal menyalakan kompor setelah beberapa percobaan */
+        <View style={[sharedStyles.flex1, sharedStyles.center, { gap: 20, paddingHorizontal: 40 }]}>
+          <View style={{
+            width: 100,
+            height: 100,
+            borderRadius: 50,
+            backgroundColor: COLORS.danger + '22',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 3,
+            borderColor: COLORS.danger + '44',
+            marginBottom: 8,
+          }}>
+            <MaterialCommunityIcons name="fire-off" size={48} color={COLORS.danger} />
+          </View>
+          
+          <Text style={{ 
+            color: COLORS.danger, 
+            fontSize: 20, 
+            fontWeight: '700', 
+            letterSpacing: 0.5,
+            textAlign: 'center',
+          }}>
+            Gagal Menyalakan Kompor
+          </Text>
+          
+          <Text style={{ 
+            color: COLORS.muted, 
+            fontSize: 13, 
+            textAlign: 'center', 
+            lineHeight: 20,
+          }}>
+            Kompor tidak dapat dinyalakan setelah {sesi} kali percobaan.{'\n'}
+            Periksa koneksi gas dan sistem ignition.
+          </Text>
+
+          <View style={{ 
+            backgroundColor: COLORS.danger + '11',
+            borderRadius: 12,
+            padding: 16,
+            marginTop: 8,
+            borderWidth: 1,
+            borderColor: COLORS.danger + '33',
+            width: '100%',
+          }}>
+            <Text style={{ 
+              color: COLORS.danger, 
+              fontSize: 12, 
+              fontWeight: '600',
+              marginBottom: 6,
+            }}>
+              ⚠️ Saran Troubleshooting:
+            </Text>
+            <Text style={{ 
+              color: COLORS.muted, 
+              fontSize: 11, 
+              lineHeight: 18,
+            }}>
+              • Pastikan gas terhubung dengan baik{'\n'}
+              • Periksa sistem ignition/pemantik{'\n'}
+              • Cek sensor api pada kompor{'\n'}
+              • Pastikan tidak ada kebocoran gas
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              paddingVertical: 14,
+              paddingHorizontal: 24,
+              borderRadius: 12,
+              backgroundColor: COLORS.accent,
+              marginTop: 12,
+            }}
+            onPress={() => {
+              // Reset navigation stack agar back button kembali ke Dashboard
+              navigation.reset({
+                index: 1,
+                routes: [
+                  { name: 'Dashboard' },
+                  { name: 'SetScreen', params: route.params },
+                ],
+              });
+            }}
+          >
+            <MaterialCommunityIcons name="arrow-left" size={18} color={COLORS.bg} />
+            <Text style={{ 
+              color: COLORS.bg, 
+              fontSize: 14, 
+              fontWeight: '600',
+            }}>
+              Kembali ke Pengaturan
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : waitingNext ? (
         /* Sesi 3 api menyala — tunggu action berikutnya dari backend */
         <View style={[sharedStyles.flex1, sharedStyles.center, { gap: 20 }]}>
           <ActivityIndicator size="large" color={COLORS.green} />
@@ -256,19 +368,21 @@ export default function IgnitionScreen({ route, navigation }: Props) {
         </Animated.View>
       )}
 
-      {/* Tombol Hentikan */}
-      <View style={bottomStyles.container}>
-        <TouchableOpacity
-          style={bottomStyles.stopBtn}
-          onPress={handleStop}
-          disabled={stopping}
-        >
-          <MaterialCommunityIcons name="stop-circle-outline" size={20} color={COLORS.danger} />
-          <Text style={bottomStyles.stopBtnText}>
-            {stopping ? 'Menghentikan...' : 'Hentikan Proses'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      {/* Tombol Hentikan - hanya tampil jika tidak gagal */}
+      {!gagal && (
+        <View style={bottomStyles.container}>
+          <TouchableOpacity
+            style={bottomStyles.stopBtn}
+            onPress={handleStop}
+            disabled={stopping}
+          >
+            <MaterialCommunityIcons name="stop-circle-outline" size={20} color={COLORS.danger} />
+            <Text style={bottomStyles.stopBtnText}>
+              {stopping ? 'Menghentikan...' : 'Hentikan Proses'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </SafeAreaView>
   );
 }

@@ -42,8 +42,8 @@ export const topBarStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 28,
-    paddingBottom: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
@@ -123,7 +123,7 @@ export const stepStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: 8,
     paddingHorizontal: 20,
   },
   stepItem: {
@@ -153,8 +153,8 @@ export const stepStyles = StyleSheet.create({
 // ─────────────────────────────────────────────────────────
 export const setStyles = StyleSheet.create({
   scrollContent: {
-    paddingBottom: 32,
-    paddingTop: 4,
+    paddingBottom: 120,
+    paddingTop: 8,
   },
 
   // Monitor card
@@ -227,15 +227,15 @@ export const setStyles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    marginBottom: 10,
-    marginTop: 4,
+    marginBottom: 8,
+    marginTop: 0,
   },
 
   // Preset row
   presetRow: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   presetBtn: {
     flex: 1,
@@ -276,7 +276,7 @@ export const setStyles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderRadius: 16,
     paddingVertical: 4,
-    marginBottom: 24,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
   },

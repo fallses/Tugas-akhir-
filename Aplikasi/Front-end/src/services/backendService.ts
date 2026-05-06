@@ -63,6 +63,7 @@ export interface HistoryData {
   finishSuhu:    number | null;    // suhu akhir dari finish
   finishTekanan: number | null;    // tekanan akhir dari finish
   createdAt:     string;
+  notes?:        string;      // catatan user
 }
 
 export interface HistoryResponse {
@@ -174,6 +175,31 @@ export async function sendStop(device?: string): Promise<void> {
       action: 'stop',
       device: device ?? null,
     }),
+  });
+  if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
+}
+
+/**
+ * Hapus riwayat berdasarkan ID.
+ * Endpoint: DELETE /sterilisasi/history/:id
+ */
+export async function deleteHistory(id: string): Promise<void> {
+  const res = await fetch(`${BACKEND_URL}/sterilisasi/history/${id}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
+}
+
+/**
+ * Update catatan riwayat berdasarkan ID.
+ * Endpoint: PATCH /sterilisasi/history/:id
+ */
+export async function updateHistoryNotes(id: string, notes: string): Promise<void> {
+  const res = await fetch(`${BACKEND_URL}/sterilisasi/history/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ notes }),
   });
   if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
 }

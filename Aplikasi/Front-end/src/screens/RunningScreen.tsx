@@ -65,20 +65,14 @@ export default function RunningScreen({ route, navigation }: Props) {
   const fadeIn    = useRef(new Animated.Value(0)).current;
   const initialTimerSet = useRef(false); // Flag untuk set total durasi sekali saja
 
-  // Tombol back hardware → reset stack ke SetScreen
+  // Blokir tombol back hardware - user harus stop atau tunggu selesai
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      navigation.reset({
-        index: 1,
-        routes: [
-          { name: 'Dashboard' },
-          { name: 'SetScreen', params: route.params },
-        ],
-      });
+      // Return true = block back button
       return true;
     });
     return () => sub.remove();
-  }, [navigation]);
+  }, []);
 
   // Fade in saat masuk
   useEffect(() => {
@@ -163,13 +157,7 @@ export default function RunningScreen({ route, navigation }: Props) {
     } catch {
       // Gagal kirim — tetap kembali ke SetScreen
     }
-    navigation.reset({
-      index: 1,
-      routes: [
-        { name: 'Dashboard' },
-        { name: 'SetScreen', params: route.params },
-      ],
-    });
+    navigation.navigate('SetScreen', route.params);
   }
 
   function formatTime(secs: number) {
@@ -218,12 +206,12 @@ export default function RunningScreen({ route, navigation }: Props) {
 
       {/* Top bar */}
       <View style={topBarStyles.container}>
-        <View style={{ width: 36 }} />
+        <View style={{ width: 80 }} />
         <View style={topBarStyles.titleBlock}>
           <Text style={topBarStyles.title}>{namaAlat}</Text>
           <Text style={topBarStyles.subtitle}>ID: {idAlat}</Text>
         </View>
-        <View style={{ width: 70 }} />
+        <View style={{ width: 80 }} />
       </View>
 
       {renderSteps()}

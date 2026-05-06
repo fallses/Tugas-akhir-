@@ -5,7 +5,7 @@ const { width, height } = Dimensions.get('window');
 export default StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#080C10',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -16,11 +16,15 @@ export default StyleSheet.create({
   brandText: {
     fontSize: 56,
     fontWeight: '900',
-    color: '#000000',
+    color: '#00D4FF',
     letterSpacing: 6,
     lineHeight: 64,
     textTransform: 'uppercase',
     fontFamily: 'Orbitron-Black',
+  },
+  cursor: {
+    marginLeft: 4,
+    opacity: 1,
   },
   btnWrapper: {
     alignItems: 'center',

@@ -8,7 +8,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingTop: 28,
+    paddingTop: 12,
   },
 
   // Greeting
@@ -16,8 +16,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#0F1520',
     borderRadius: 16,
     padding: 20,
-    marginBottom: 24,
-    marginTop: 8,
+    marginBottom: 20,
+    marginTop: 4,
     borderWidth: 1,
     borderColor: '#1E2D42',
   },
@@ -37,7 +37,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   listTitle: {
     fontSize: 15,

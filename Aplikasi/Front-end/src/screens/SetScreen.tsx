@@ -1,16 +1,3 @@
-/**
- * SetScreen.tsx
- *
- * Tampilan SET — satu-satunya tampilan yang boleh memiliki fitur otomatis
- * (monitoring realtime dari backend) dan mengirim perintah ke backend.
- *
- * Perpindahan ke CountdownScreen terjadi HANYA saat:
- *   1. User menekan "Mulai Proses" (tombol manual)
- *   2. Backend mengirim action "countdown"
- *
- * Jika belum ada kiriman data baru → tetap di halaman ini.
- */
-
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
@@ -21,6 +8,8 @@ import {
   ScrollView,
   TextInput,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -44,9 +33,9 @@ const PHASES = [
 ];
 
 const PRESETS = [
-  { label: 'Cepat',    jam: 0, menit: 15, suhu: 121, tekanan: 1.0 },
-  { label: 'Standar',  jam: 0, menit: 20, suhu: 121, tekanan: 1.2 },
-  { label: 'Intensif', jam: 0, menit: 30, suhu: 134, tekanan: 2.0 },
+  { label: 'Cepat',    jam: 2, menit: 0, suhu: 120, tekanan: 1.0 },
+  { label: 'Standar',  jam: 4, menit: 0, suhu: 120, tekanan: 2.0 },
+  { label: 'Intensif', jam: 6, menit: 0, suhu: 120, tekanan: 3.0 },
 ];
 
 interface Props {
@@ -54,27 +43,44 @@ interface Props {
     params: {
       namaAlat: string;
       idAlat: string;
-      // Opsional: nilai awal dari proses sebelumnya
       sterilDetik?: number;
       inputSuhu?: string;
       inputTekanan?: string;
+      prefilledData?: {
+        waktu: string;      // format "HH:MM"
+        suhu: string;
+        tekanan: string;
+      };
     };
   };
   navigation: any;
 }
 
 export default function SetScreen({ route, navigation }: Props) {
-  const { namaAlat, idAlat } = route.params;
+  const { namaAlat, idAlat, prefilledData } = route.params;
 
   const [selectedPreset, setSelectedPreset] = useState(1);
   const [inputJam, setInputJam]         = useState('0');
   const [inputMenit, setInputMenit]     = useState('20');
-  const [inputSuhu, setInputSuhu]       = useState(route.params.inputSuhu ?? '121');
-  const [inputTekanan, setInputTekanan] = useState(route.params.inputTekanan ?? '1.2');
-
-  // true = user sudah tekan Mulai, sedang menunggu kiriman "countdown" dari backend
-  // Navigasi ditangani sepenuhnya oleh global listener di App.tsx
+  const [inputSuhu, setInputSuhu]       = useState(route.params.inputSuhu ?? '');
+  const [inputTekanan, setInputTekanan] = useState(route.params.inputTekanan ?? '');
   const [waitingForBackend, setWaitingForBackend] = useState(false);
+
+  // Jika ada prefilledData dari history, isi field-field
+  useEffect(() => {
+    if (prefilledData) {
+      // Parse waktu dari format "HH:MM" atau "H:MM"
+      const [jamStr, menitStr] = prefilledData.waktu.split(':');
+      const jam = parseInt(jamStr, 10) || 0;
+      const menit = parseInt(menitStr, 10) || 0;
+      
+      setInputJam(jam.toString());
+      setInputMenit(menit.toString());
+      setInputSuhu(prefilledData.suhu);
+      setInputTekanan(prefilledData.tekanan);
+      setSelectedPreset(-1); // Reset preset selection
+    }
+  }, [prefilledData]);
 
   // Reset overlay saat screen kembali difokus (misal setelah navigate balik)
   useFocusEffect(
@@ -175,35 +181,44 @@ export default function SetScreen({ route, navigation }: Props) {
 
       {/* Top bar */}
       <View style={topBarStyles.container}>
-        <Pressable
-          style={topBarStyles.backBtn}
-          onPress={() =>
-            navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Dashboard')
-          }
-          hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
-        >
-          <MaterialCommunityIcons name="arrow-left" size={18} color={COLORS.muted} />
-        </Pressable>
+        <View style={{ width: 80, alignItems: 'flex-start' }}>
+          <Pressable
+            style={topBarStyles.backBtn}
+            onPress={() =>
+              navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Dashboard')
+            }
+            hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+          >
+            <MaterialCommunityIcons name="arrow-left" size={18} color={COLORS.muted} />
+          </Pressable>
+        </View>
         <View style={topBarStyles.titleBlock}>
           <Text style={topBarStyles.title}>{namaAlat}</Text>
           <Text style={topBarStyles.subtitle}>ID: {idAlat}</Text>
         </View>
-        <TouchableOpacity
-          style={topBarStyles.historyBtn}
-          onPress={() => navigation.navigate('History')}
-        >
-          <MaterialCommunityIcons name="history" size={16} color={COLORS.muted} />
-          <Text style={topBarStyles.historyBtnText}>Riwayat</Text>
-        </TouchableOpacity>
+        <View style={{ width: 80, alignItems: 'flex-end' }}>
+          <TouchableOpacity
+            style={topBarStyles.historyBtn}
+            onPress={() => navigation.navigate('History', { idAlat })}
+          >
+            <MaterialCommunityIcons name="history" size={16} color={COLORS.muted} />
+            <Text style={topBarStyles.historyBtnText}>Riwayat</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {renderSteps()}
 
-      <View style={[sharedStyles.flex1, { width: '100%', paddingHorizontal: 20 }]}>
+      <KeyboardAvoidingView
+        style={[sharedStyles.flex1, { width: '100%' }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
         <ScrollView
           style={{ flex: 1, width: '100%' }}
-          contentContainerStyle={setStyles.scrollContent}
+          contentContainerStyle={[setStyles.scrollContent, { paddingHorizontal: 20 }]}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
           // Nonaktifkan scroll saat menunggu
           scrollEnabled={!waitingForBackend}
         >
@@ -308,7 +323,6 @@ export default function SetScreen({ route, navigation }: Props) {
                 <MaterialCommunityIcons name="thermometer-high" size={18} color={COLORS.fire} />
                 <View>
                   <Text style={setStyles.paramName}>Suhu Target</Text>
-                  <Text style={{ color: COLORS.muted, fontSize: 10, marginTop: 1 }}>100 – 150 °C</Text>
                 </View>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -317,21 +331,16 @@ export default function SetScreen({ route, navigation }: Props) {
                   value={inputSuhu}
                   onChangeText={v => {
                     const raw = v.replace(/[^0-9]/g, '');
-                    if (raw === '') { setInputSuhu(''); return; }
-                    const num = parseInt(raw, 10);
-                    if (num > 150) return;
                     setInputSuhu(raw);
                   }}
                   onBlur={() => {
+                    if (inputSuhu === '') return; // Biarkan kosong
                     const num = parseInt(inputSuhu, 10);
-                    if (isNaN(num) || inputSuhu === '') { setInputSuhu('121'); return; }
-                    if (num < 100) setInputSuhu('100');
-                    else if (num > 150) setInputSuhu('150');
-                    else setInputSuhu(num.toString());
+                    if (isNaN(num)) { setInputSuhu(''); return; }
+                    setInputSuhu(num.toString());
                   }}
                   keyboardType="numeric"
-                  maxLength={3}
-                  placeholder="121"
+                  placeholder="0"
                   placeholderTextColor={COLORS.muted}
                 />
                 <Text style={setStyles.paramUnit}>°C</Text>
@@ -345,7 +354,6 @@ export default function SetScreen({ route, navigation }: Props) {
                 <MaterialCommunityIcons name="gauge" size={18} color={COLORS.accent} />
                 <View>
                   <Text style={setStyles.paramName}>Tekanan Target</Text>
-                  <Text style={{ color: COLORS.muted, fontSize: 10, marginTop: 1 }}>0.5 – 3.0 bar</Text>
                 </View>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -354,24 +362,18 @@ export default function SetScreen({ route, navigation }: Props) {
                   value={inputTekanan}
                   onChangeText={v => {
                     const clean = v.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
-                    if (clean === '' || clean === '.') { setInputTekanan(clean); return; }
-                    const num = parseFloat(clean);
-                    if (isNaN(num)) return;
-                    if (num > 3.0) return;
                     setInputTekanan(clean);
                   }}
                   onBlur={() => {
-                    const num = parseFloat(inputTekanan);
-                    if (isNaN(num) || inputTekanan === '' || inputTekanan === '.') {
-                      setInputTekanan('1.2'); return;
+                    if (inputTekanan === '' || inputTekanan === '.') {
+                      setInputTekanan(''); return; // Biarkan kosong
                     }
-                    if (num < 0.5) setInputTekanan('0.5');
-                    else if (num > 3.0) setInputTekanan('3.0');
-                    else setInputTekanan(num.toFixed(1));
+                    const num = parseFloat(inputTekanan);
+                    if (isNaN(num)) { setInputTekanan(''); return; }
+                    setInputTekanan(num.toFixed(1));
                   }}
                   keyboardType="decimal-pad"
-                  maxLength={4}
-                  placeholder="1.2"
+                  placeholder="0.0"
                   placeholderTextColor={COLORS.muted}
                 />
                 <Text style={setStyles.paramUnit}>bar</Text>
@@ -388,7 +390,7 @@ export default function SetScreen({ route, navigation }: Props) {
             <Text style={setStyles.startBtnText}>Mulai Proses</Text>
           </TouchableOpacity>
         </ScrollView>
-      </View>
+      </KeyboardAvoidingView>
 
       {/* Loading overlay — muncul setelah Mulai ditekan, menunggu backend */}
       {waitingForBackend && (

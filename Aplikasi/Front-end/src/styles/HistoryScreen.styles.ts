@@ -30,8 +30,8 @@ export const topBarStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 28,
-    paddingBottom: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
@@ -72,10 +72,10 @@ export const topBarStyles = StyleSheet.create({
 // ─────────────────────────────────────────────────────────
 export const filterStyles = StyleSheet.create({
   container: {
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
-    maxHeight: 52,
+    maxHeight: 48,
   },
   chip: {
     paddingHorizontal: 14,

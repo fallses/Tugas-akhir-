@@ -14,6 +14,7 @@ import {
   StatusBar,
   ActivityIndicator,
   TouchableOpacity,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -58,6 +59,15 @@ export default function CountdownScreen({ route, navigation }: Props) {
   const mulaiOpacity   = useRef(new Animated.Value(0)).current;
   const mulaiScale     = useRef(new Animated.Value(0.5)).current;
   const fadeIn         = useRef(new Animated.Value(0)).current;
+
+  // Blokir tombol back hardware - user harus stop atau tunggu selesai
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Return true = block back button
+      return true;
+    });
+    return () => sub.remove();
+  }, []);
 
   const enterFade = useCallback(() => {
     fadeIn.setValue(0);
@@ -155,12 +165,12 @@ export default function CountdownScreen({ route, navigation }: Props) {
 
       {/* Top bar */}
       <View style={topBarStyles.container}>
-        <View style={{ width: 36 }} />
+        <View style={{ width: 80 }} />
         <View style={topBarStyles.titleBlock}>
           <Text style={topBarStyles.title}>{namaAlat}</Text>
           <Text style={topBarStyles.subtitle}>ID: {idAlat}</Text>
         </View>
-        <View style={{ width: 70 }} />
+        <View style={{ width: 80 }} />
       </View>
 
       {renderSteps()}

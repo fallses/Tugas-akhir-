@@ -146,12 +146,12 @@ export default function FinishScreen({ route, navigation }: Props) {
 
       {/* Top bar */}
       <View style={topBarStyles.container}>
-        <View style={{ width: 36 }} />
+        <View style={{ width: 80 }} />
         <View style={topBarStyles.titleBlock}>
           <Text style={topBarStyles.title}>{namaAlat}</Text>
           <Text style={topBarStyles.subtitle}>ID: {idAlat}</Text>
         </View>
-        <View style={{ width: 70 }} />
+        <View style={{ width: 80 }} />
       </View>
 
       {renderSteps()}
@@ -221,15 +221,25 @@ export default function FinishScreen({ route, navigation }: Props) {
           <View style={{ width: '100%', gap: 10 }}>
             <TouchableOpacity
               style={finishStyles.doneBtn}
-              onPress={() =>
-                navigation.navigate('SetScreen', {
-                  namaAlat,
-                  idAlat,
-                  sterilDetik,
-                  inputSuhu,
-                  inputTekanan,
-                })
-              }
+              onPress={() => {
+                // Reset navigation stack agar back button kembali ke Dashboard
+                navigation.reset({
+                  index: 1,
+                  routes: [
+                    { name: 'Dashboard' },
+                    {
+                      name: 'SetScreen',
+                      params: {
+                        namaAlat,
+                        idAlat,
+                        sterilDetik,
+                        inputSuhu,
+                        inputTekanan,
+                      },
+                    },
+                  ],
+                });
+              }}
             >
               <MaterialCommunityIcons name="refresh" size={18} color={COLORS.bg} />
               <Text style={finishStyles.doneBtnText}>Proses Baru</Text>
@@ -237,7 +247,13 @@ export default function FinishScreen({ route, navigation }: Props) {
 
             <TouchableOpacity
               style={finishStyles.secondaryBtn}
-              onPress={() => navigation.navigate('Dashboard')}
+              onPress={() => {
+                // Reset ke Dashboard
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Dashboard' }],
+                });
+              }}
             >
               <MaterialCommunityIcons name="home-outline" size={18} color={COLORS.muted} />
               <Text style={finishStyles.secondaryBtnText}>Kembali ke Dashboard</Text>
