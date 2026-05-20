@@ -76,7 +76,7 @@ function convertHistoryDataToEntry(data: HistoryData[], alatMap: Map<string, str
       hour: '2-digit',
       minute: '2-digit',
     });
-    
+
     // Hitung mulai pukul dari waktu durasi (dari set)
     let mulaiPukul = selesaiPukul;
     if (item.waktu) {
@@ -91,21 +91,25 @@ function convertHistoryDataToEntry(data: HistoryData[], alatMap: Map<string, str
       }
     }
 
-    const idAlat = item.device ?? '-';
-    const namaAlat = alatMap.get(idAlat) ?? idAlat; // Gunakan nama dari map, fallback ke ID
+    const idAlat   = item.device ?? '-';
+    const namaAlat = alatMap.get(idAlat) ?? idAlat;
+
+    // Mapping status dari backend ke label frontend
+    const status: 'Berhasil' | 'Dihentikan' =
+      item.status === 'stop' ? 'Dihentikan' : 'Berhasil';
 
     return {
       id: item._id ?? `history-${index}`,
       namaAlat,
       idAlat,
-      suhu: item.suhu ?? 0,              // dari set
-      tekanan: item.tekanan ?? 0,        // dari set
-      durasi: item.waktu ?? '00:00',     // dari set
+      suhu:    item.suhu    ?? 0,
+      tekanan: item.tekanan ?? 0,
+      durasi:  item.waktu   ?? '00:00',
       tanggal,
       mulaiPukul,
       selesaiPukul,
-      status: 'Berhasil' as const,
-      notes: item.notes ?? '',           // dari database
+      status,
+      notes: item.notes ?? '',
     };
   });
 }

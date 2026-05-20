@@ -57,13 +57,14 @@ export interface FinishListResponse {
 export interface HistoryData {
   _id:           string;
   device:        string | null;
-  suhu:          number;      // dari set
-  tekanan:       number;      // dari set
-  waktu:         string;      // dari set (durasi)
-  finishSuhu:    number | null;    // suhu akhir dari finish
-  finishTekanan: number | null;    // tekanan akhir dari finish
+  suhu:          number;
+  tekanan:       number;
+  waktu:         string;
+  finishSuhu:    number | null;
+  finishTekanan: number | null;
+  status:        string;        // "selesai" | "stop"
+  notes?:        string;
   createdAt:     string;
-  notes?:        string;      // catatan user
 }
 
 export interface HistoryResponse {
@@ -200,6 +201,49 @@ export async function updateHistoryNotes(id: string, notes: string): Promise<voi
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ notes }),
+  });
+  if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
+}
+
+/**
+ * Kirim kontrol manual ke backend.
+ * Endpoint: POST /sterilisasi/manual
+ * Backend publish ke MQTT sterilisasi/manual
+ */
+export async function sendManual(params: {
+  valve:   'OPEN' | 'CLOSE';
+  gas:     'TUTUP' | 'KECIL' | 'SEDANG' | 'BESAR';
+  starter: 'ON' | 'OFF';
+  device:  string;
+  action?: string;
+}): Promise<void> {
+  const res = await fetch(`${BACKEND_URL}/sterilisasi/manual`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
+}
+
+/**
+ * Kirim trigger action ke topik sterilisasi/manual.
+ * Endpoint: POST /sterilisasi/manual
+ * Payload: { action, device } — valve/gas/starter di-set null
+ */
+export async function sendManualAction(params: {
+  action: string;
+  device: string;
+}): Promise<void> {
+  const res = await fetch(`${BACKEND_URL}/sterilisasi/manual`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      valve:   null,
+      gas:     null,
+      starter: null,
+      action:  params.action,
+      device:  params.device,
+    }),
   });
   if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
 }

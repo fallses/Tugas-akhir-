@@ -389,6 +389,14 @@ export default function SetScreen({ route, navigation }: Props) {
             <MaterialCommunityIcons name="play" size={18} color={COLORS.bg} />
             <Text style={setStyles.startBtnText}>Mulai Proses</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={setStyles.manualBtn}
+            onPress={() => navigation.navigate('ManualControl', { namaAlat, idAlat })}
+          >
+            <MaterialCommunityIcons name="tune-variant" size={18} color={COLORS.muted} />
+            <Text style={setStyles.manualBtnText}>Kontrol Manual</Text>
+          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
 

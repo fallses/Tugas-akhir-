@@ -28,12 +28,14 @@ const runningSchema = new mongoose.Schema({
 });
 
 // ── Koleksi: data dari topik sterilisasi/finish ───────────
-// Menyimpan data saat proses selesai
+// Menyimpan data saat proses selesai atau dihentikan
 const finishSchema = new mongoose.Schema({
   suhu:     { type: Number },
   tekanan:  { type: Number },
   waktu:    { type: mongoose.Schema.Types.Mixed },
   device:   { type: String },
+  status:   { type: String, default: "selesai" }, // "selesai" | "stop"
+  notes:    { type: String, default: "" },
   createdAt:{ type: Date, default: Date.now },
 });
 

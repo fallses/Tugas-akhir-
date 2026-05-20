@@ -351,6 +351,25 @@ export const setStyles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
+  // Manual control button
+  manualBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 14,
+    paddingVertical: 14,
+    gap: 8,
+    marginTop: 10,
+  },
+  manualBtnText: {
+    color: COLORS.muted,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+
   // Legacy styles kept for compatibility
   wrapper: {
     flex: 1,

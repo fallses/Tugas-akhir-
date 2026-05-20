@@ -112,11 +112,10 @@ router.get("/finish", async (_req, res) => {
 router.get("/history", async (_req, res) => {
   try {
     const finishData = await Finish.find().sort({ createdAt: -1 }).limit(100);
-    
-    // Untuk setiap finish, cari set yang sesuai (device sama, waktu berdekatan)
+
     const history = await Promise.all(
       finishData.map(async (finish) => {
-        // Cari set dengan device yang sama dan waktu dalam rentang 2 jam sebelum finish
+        // Cari set dengan device yang sama dalam rentang 2 jam sebelum finish
         const timeWindow = new Date(finish.createdAt.getTime() - 2 * 60 * 60 * 1000);
         const matchingSet = await Set.findOne({
           device: finish.device,
@@ -125,19 +124,44 @@ router.get("/history", async (_req, res) => {
         }).sort({ createdAt: -1 });
 
         return {
-          _id: finish._id,
-          device: finish.device,
-          suhu: matchingSet?.suhu ?? finish.suhu ?? 0,
-          tekanan: matchingSet?.tekanan ?? finish.tekanan ?? 0,
-          waktu: matchingSet?.waktu ?? finish.waktu ?? "00:00",
-          finishSuhu: finish.suhu,
-          finishTekanan: finish.tekanan,
-          createdAt: finish.createdAt,
+          _id:          finish._id,
+          device:       finish.device,
+          suhu:         matchingSet?.suhu     ?? finish.suhu     ?? 0,
+          tekanan:      matchingSet?.tekanan  ?? finish.tekanan  ?? 0,
+          waktu:        matchingSet?.waktu    ?? finish.waktu    ?? "00:00",
+          finishSuhu:   finish.suhu,
+          finishTekanan:finish.tekanan,
+          status:       finish.status ?? "selesai",  // "selesai" | "stop"
+          notes:        finish.notes  ?? "",
+          createdAt:    finish.createdAt,
         };
       })
     );
 
     res.json({ status: "success", data: history });
+  } catch (error) {
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+// ── PATCH /sterilisasi/history/:id ────────────────────────────
+// Update catatan (notes) pada history
+router.patch("/history/:id", async (req, res) => {
+  try {
+    const { notes } = req.body;
+    await Finish.findByIdAndUpdate(req.params.id, { notes });
+    res.json({ status: "success", message: "Catatan berhasil diperbarui" });
+  } catch (error) {
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+// ── DELETE /sterilisasi/history/:id ───────────────────────────
+// Hapus satu entri history
+router.delete("/history/:id", async (req, res) => {
+  try {
+    await Finish.findByIdAndDelete(req.params.id);
+    res.json({ status: "success", message: "Riwayat berhasil dihapus" });
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
   }
@@ -160,6 +184,31 @@ router.get("/finish/last", async (_req, res) => {
     console.log("[GET /sterilisasi/finish/last] Data finish di-consume:", JSON.stringify(dataToSend));
 
     res.json({ status: "success", data: dataToSend });
+  } catch (error) {
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+// ── POST /sterilisasi/manual ──────────────────────────────
+// Frontend kirim kontrol manual → publish ke topik sterilisasi/manual
+router.post("/manual", async (req, res) => {
+  try {
+    const { valve, gas, starter, device } = req.body;
+
+    if (!device) {
+      return res.status(400).json({ status: "error", message: "Field device wajib diisi" });
+    }
+
+    const mqttPayload = {
+      valve:   valve   ?? null,
+      gas:     gas     ?? null,
+      starter: starter ?? null,
+      device,
+    };
+
+    await mqttClient.publishManual(mqttPayload);
+
+    res.json({ status: "success", message: "Kontrol manual berhasil dikirim" });
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
   }

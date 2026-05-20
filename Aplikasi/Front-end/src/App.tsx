@@ -32,6 +32,7 @@ import IgnitionScreen  from './screens/IgnitionScreen';
 import RunningScreen   from './screens/RunningScreen';
 import FinishScreen    from './screens/FinishScreen';
 import HistoryScreen   from './screens/HistoryScreen';
+import ManualControlScreen from './screens/ManualControlScreen';
 
 import { fetchLastRunning, fetchLastFinish } from './services/backendService';
 import { POLL_INTERVAL_MS } from './config';
@@ -270,6 +271,7 @@ export default function App() {
         <Stack.Screen name="RunningScreen"   component={RunningScreen as any} />
         <Stack.Screen name="FinishScreen"    component={FinishScreen as any} />
         <Stack.Screen name="History"         component={HistoryScreen as any} />
+        <Stack.Screen name="ManualControl"   component={ManualControlScreen as any} />
       </Stack.Navigator>
     </NavigationContainer>
   );

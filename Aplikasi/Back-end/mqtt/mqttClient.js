@@ -20,6 +20,7 @@ const SUBSCRIBE_TOPIC = "sterilisasi/running";
 const FINISH_TOPIC    = "sterilisasi/finish";
 const SET_TOPIC       = "sterilisasi/set";
 const PUBLISH_TOPIC   = "sterilisasi/set";
+const MANUAL_TOPIC    = "sterilisasi/manual";
 
 const client = mqtt.connect(broker);
 
@@ -84,29 +85,64 @@ client.on("message", async (receivedTopic, message) => {
 
   // ── Topik sterilisasi/finish ──────────────────────────────
   if (receivedTopic === FINISH_TOPIC) {
+    const finishAction = data.action ?? null;
+    const device = data.Device ?? data.device ?? null;
+
+    // Alat kirim action "stop" melalui topik finish → perlakukan sebagai stop
+    if (finishAction === "stop") {
+      console.log(`[sterilisasi/finish] Menerima action STOP dari alat (device: ${device})`);
+      lastData = {
+        action:  "stop",
+        suhu:    data.suhu    ?? null,
+        tekanan: data.tekanan ?? null,
+        waktu:   null,
+        timer:   null,
+        device,
+        sesi:    null,
+        status:  null,
+      };
+      console.log("lastData diperbarui dengan action stop (dari alat via finish):", lastData);
+      try {
+        await new Running(lastData).save();
+        // Simpan juga ke Finish dengan status "stop" agar masuk history
+        await new Finish({
+          suhu:    data.suhu    ?? null,
+          tekanan: data.tekanan ?? null,
+          waktu:   null,
+          device,
+          status:  "stop",
+        }).save();
+        console.log("[sterilisasi/finish] Stop disimpan ke Running & Finish");
+      } catch (error) {
+        console.error("[sterilisasi/finish] Gagal simpan stop:", error.message);
+      }
+      return;
+    }
+
+    // Sinyal finish normal (tanpa action atau action bukan "stop")
     lastFinishData = {
       suhu:    data.suhu    ?? null,
       tekanan: data.tekanan ?? null,
-      waktu:   data.waktu   ?? null, // Tidak menggunakan fallback
-      device:  data.Device  ?? data.device ?? null,
+      waktu:   data.waktu   ?? null,
+      device,
     };
-    finishConsumed = false;
-    finishTimestamp = Date.now(); // Catat waktu finish diterima
+    finishConsumed  = false;
+    finishTimestamp = Date.now();
     console.log("lastFinishData diperbarui:", lastFinishData);
-    
-    // Update lastData juga agar frontend bisa detect action finish
+
+    // Update lastData agar frontend bisa detect action finish
     lastData = {
       action:  "finish",
       suhu:    data.suhu    ?? null,
       tekanan: data.tekanan ?? null,
       waktu:   data.waktu   ?? null,
       timer:   null,
-      device:  data.Device  ?? data.device ?? null,
+      device,
       sesi:    null,
       status:  null,
     };
     console.log("lastData diperbarui dengan action finish:", lastData);
-    
+
     try {
       await new Finish(lastFinishData).save();
       console.log("[sterilisasi/finish] Disimpan ke collection Finish");
@@ -189,6 +225,14 @@ module.exports = {
       client.publish(SUBSCRIBE_TOPIC, JSON.stringify(payload), (err) => {
         if (err) reject(err);
         else { console.log(`[PUBLISH] ${SUBSCRIBE_TOPIC}:`, JSON.stringify(payload)); resolve(); }
+      });
+    });
+  },
+  publishManual: (payload) => {
+    return new Promise((resolve, reject) => {
+      client.publish(MANUAL_TOPIC, JSON.stringify(payload), (err) => {
+        if (err) reject(err);
+        else { console.log(`[PUBLISH] ${MANUAL_TOPIC}:`, JSON.stringify(payload)); resolve(); }
       });
     });
   },
