@@ -95,8 +95,49 @@ function convertHistoryDataToEntry(data: HistoryData[], alatMap: Map<string, str
     const namaAlat = alatMap.get(idAlat) ?? idAlat;
 
     // Mapping status dari backend ke label frontend
-    const status: 'Berhasil' | 'Dihentikan' =
-      item.status === 'stop' ? 'Dihentikan' : 'Berhasil';
+    // Prioritas: cek field 'action' dulu, fallback ke 'status'
+    let status: 'Berhasil' | 'Dihentikan' = 'Berhasil';
+    
+    // Debug log untuk melihat data dari backend
+    console.log(`[HistoryScreen] Item ${item._id}:`, JSON.stringify({
+      action: item.action,
+      status: item.status,
+    }));
+    
+    // Cek action terlebih dahulu
+    if (item.action && typeof item.action === 'string' && item.action.trim() !== '') {
+      const actionLower = item.action.toLowerCase().trim();
+      // Jika action adalah "stop" atau mengandung "stop", maka Dihentikan
+      if (actionLower === 'stop' || actionLower.includes('stop')) {
+        status = 'Dihentikan';
+      } 
+      // Jika action adalah "finish" atau "selesai", maka Berhasil
+      else if (actionLower === 'finish' || actionLower === 'selesai' || actionLower.includes('finish')) {
+        status = 'Berhasil';
+      }
+      // Selain itu, default Dihentikan (karena bukan finish)
+      else {
+        status = 'Dihentikan';
+      }
+      console.log(`[HistoryScreen] Menggunakan action: "${item.action}" → Status: ${status}`);
+    } 
+    // Fallback ke status
+    else if (item.status && typeof item.status === 'string' && item.status.trim() !== '') {
+      const statusLower = item.status.toLowerCase().trim();
+      // Jika status adalah "stop" atau mengandung "stop", maka Dihentikan
+      if (statusLower === 'stop' || statusLower.includes('stop')) {
+        status = 'Dihentikan';
+      }
+      // Jika status adalah "selesai" atau "finish", maka Berhasil
+      else if (statusLower === 'selesai' || statusLower === 'finish' || statusLower.includes('selesai')) {
+        status = 'Berhasil';
+      }
+      // Default Berhasil
+      else {
+        status = 'Berhasil';
+      }
+      console.log(`[HistoryScreen] Menggunakan status (fallback): "${item.status}" → Status: ${status}`);
+    }
 
     return {
       id: item._id ?? `history-${index}`,

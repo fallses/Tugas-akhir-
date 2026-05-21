@@ -14,7 +14,7 @@ import sharedStyles, {
   topBarStyles,
 } from '../styles/ProcessScreen.styles';
 import styles from '../styles/ManualControlScreen.styles';
-import { sendManual, sendManualAction, fetchLastRunning } from '../services/backendService';
+import { sendManual, fetchLastManual } from '../services/backendService';
 import { POLL_INTERVAL_MS } from '../config';
 
 // ── Types ─────────────────────────────────────────────────
@@ -39,18 +39,11 @@ export default function ManualControlScreen({ route, navigation }: Props) {
 
   const [sending,      setSending]      = useState(false);
   const [sendStatus,   setSendStatus]   = useState<'idle' | 'success' | 'error'>('idle');
-  const [errorMessage, setErrorMessage] = useState<string>('');
-  const [lastSent,     setLastSent]     = useState<{
-    valve: ValveState;
-    gas: GasState;
-    starter: StarterState;
-  } | null>(null);
 
   // ── Monitor suhu & tekanan real-time ──────────────────
   const [suhu,           setSuhu]           = useState<number | null>(null);
   const [tekanan,        setTekanan]        = useState<number | null>(null);
   const [monitorLoading, setMonitorLoading] = useState(true);
-  const [refreshing,     setRefreshing]     = useState(false);
 
   // Ref untuk debounce timer
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -64,10 +57,36 @@ export default function ManualControlScreen({ route, navigation }: Props) {
   useEffect(() => {
     async function poll() {
       try {
-        const res = await fetchLastRunning();
+        const res = await fetchLastManual();
         if (res.status === 'success' && res.data) {
-          if (res.data.suhu    != null) setSuhu(res.data.suhu);
-          if (res.data.tekanan != null) setTekanan(res.data.tekanan);
+          // Update suhu & tekanan
+          if (res.data.suhureal    != null) setSuhu(res.data.suhureal);
+          if (res.data.tekananreal != null) setTekanan(res.data.tekananreal);
+          
+          // Update status aktuator dari alat (realtime)
+          if (res.data.valve != null) {
+            const valveValue = res.data.valve.toUpperCase() as ValveState;
+            if (valveValue === 'OPEN' || valveValue === 'CLOSE') {
+              setValve(valveValue);
+              valveRef.current = valveValue;
+            }
+          }
+          
+          if (res.data.gas != null) {
+            const gasValue = res.data.gas.toUpperCase() as GasState;
+            if (['TUTUP', 'KECIL', 'SEDANG', 'BESAR'].includes(gasValue)) {
+              setGas(gasValue);
+              gasRef.current = gasValue;
+            }
+          }
+          
+          if (res.data.starter != null) {
+            const starterValue = res.data.starter.toUpperCase() as StarterState;
+            if (starterValue === 'ON' || starterValue === 'OFF') {
+              setStarter(starterValue);
+              starterRef.current = starterValue;
+            }
+          }
         }
       } catch {
         // Gagal polling — coba lagi di interval berikutnya
@@ -80,28 +99,6 @@ export default function ManualControlScreen({ route, navigation }: Props) {
     return () => clearInterval(interval);
   }, []);
 
-  // ── Refresh monitor — kirim action "manual" ke alat ──
-  // Payload: { action: "manual", device: idAlat }
-  // Alat akan merespons dengan mengirim data suhu & tekanan terkini
-  async function handleRefreshMonitor() {
-    if (refreshing) return;
-    setRefreshing(true);
-    try {
-      await sendManualAction({ action: 'manual', device: idAlat });
-      // Tunggu sebentar lalu poll sekali untuk ambil data terbaru
-      await new Promise<void>(r => setTimeout(r, 800));
-      const res = await fetchLastRunning();
-      if (res.status === 'success' && res.data) {
-        if (res.data.suhu    != null) setSuhu(res.data.suhu);
-        if (res.data.tekanan != null) setTekanan(res.data.tekanan);
-      }
-    } catch {
-      // Gagal — biarkan polling interval yang handle
-    } finally {
-      setRefreshing(false);
-    }
-  }
-
   // ── Kirim ke backend ──────────────────────────────────
   const dispatchSend = useCallback(async (
     v: ValveState,
@@ -110,14 +107,11 @@ export default function ManualControlScreen({ route, navigation }: Props) {
   ) => {
     setSending(true);
     setSendStatus('idle');
-    setErrorMessage('');
     try {
       await sendManual({ valve: v, gas: g, starter: s, device: idAlat });
       setSendStatus('success');
-      setLastSent({ valve: v, gas: g, starter: s });
     } catch (err: any) {
       setSendStatus('error');
-      setErrorMessage(err?.message ?? 'Terjadi kesalahan');
     } finally {
       setSending(false);
     }
@@ -263,19 +257,6 @@ export default function ManualControlScreen({ route, navigation }: Props) {
           <View style={styles.monitorHeader}>
             <MaterialCommunityIcons name="chart-line" size={14} color={COLORS.muted} />
             <Text style={styles.monitorTitle}>Monitor Real-Time</Text>
-            <TouchableOpacity
-              style={styles.monitorRefreshBtn}
-              onPress={handleRefreshMonitor}
-              disabled={refreshing || monitorLoading}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              activeOpacity={0.7}
-            >
-              {refreshing ? (
-                <ActivityIndicator size="small" color={COLORS.accent} />
-              ) : (
-                <MaterialCommunityIcons name="refresh" size={16} color={COLORS.accent} />
-              )}
-            </TouchableOpacity>
           </View>
           <View style={styles.monitorRow}>
             {/* Suhu */}
@@ -347,24 +328,6 @@ export default function ManualControlScreen({ route, navigation }: Props) {
             {renderStarterOption('OFF', 'OFF')}
           </View>
         </View>
-
-        {/* Status terakhir dikirim */}
-        {lastSent !== null && (
-          <View style={styles.statusCard}>
-            <View style={styles.statusHeader}>
-              <Text style={styles.statusLabel}>Terakhir Dikirim</Text>
-              {sendStatus === 'success' && (
-                <Text style={styles.statusSuccess}>✓ Berhasil</Text>
-              )}
-              {sendStatus === 'error' && (
-                <Text style={styles.statusError}>✗ {errorMessage}</Text>
-              )}
-            </View>
-            <Text style={styles.statusText}>
-              {JSON.stringify(lastSent, null, 2)}
-            </Text>
-          </View>
-        )}
       </ScrollView>
     </SafeAreaView>
   );

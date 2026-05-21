@@ -36,6 +36,9 @@ import ManualControlScreen from './screens/ManualControlScreen';
 
 import { fetchLastRunning, fetchLastFinish } from './services/backendService';
 import { POLL_INTERVAL_MS } from './config';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const STORAGE_KEY = '@daftar_alat';
 
 const Stack = createNativeStackNavigator();
 
@@ -54,8 +57,99 @@ let activeProcessParams: {
   inputTekanan: string;
 } | null = null;
 
+/**
+ * Flag untuk menandai bahwa proses sedang dihentikan.
+ * Ketika true, polling akan mengabaikan data running/ignition/countdown dari alat.
+ * Flag ini akan direset setelah beberapa detik atau saat masuk ke FinishScreen.
+ */
+let isStoppingProcess = false;
+let stopTimeout: ReturnType<typeof setTimeout> | null = null;
+
 export function setActiveProcessParams(params: typeof activeProcessParams) {
   activeProcessParams = params;
+}
+
+/**
+ * Fungsi untuk menandai bahwa proses sedang dihentikan.
+ * Dipanggil dari screen ketika user menekan tombol stop.
+ */
+export function markProcessAsStopping() {
+  console.log('[App] Proses ditandai sebagai stopping - polling akan mengabaikan data running');
+  isStoppingProcess = true;
+  
+  // Reset flag setelah 10 detik untuk menghindari stuck
+  if (stopTimeout) clearTimeout(stopTimeout);
+  stopTimeout = setTimeout(() => {
+    console.log('[App] Reset flag stopping setelah timeout');
+    isStoppingProcess = false;
+  }, 10000);
+}
+
+/**
+ * Fungsi untuk mereset flag stopping.
+ * Dipanggil saat sudah masuk ke FinishScreen atau Dashboard.
+ */
+export function resetStoppingFlag() {
+  console.log('[App] Reset flag stopping');
+  isStoppingProcess = false;
+  if (stopTimeout) {
+    clearTimeout(stopTimeout);
+    stopTimeout = null;
+  }
+}
+
+/**
+ * Fungsi untuk memvalidasi apakah ID alat terdaftar di dashboard.
+ * Hanya alat yang terdaftar yang akan direspon oleh polling.
+ */
+async function isDeviceRegistered(deviceId: string | null): Promise<boolean> {
+  if (!deviceId) {
+    console.log('[App] Device ID kosong - abaikan');
+    return false;
+  }
+
+  try {
+    const stored = await AsyncStorage.getItem(STORAGE_KEY);
+    if (!stored) {
+      console.log('[App] Tidak ada alat terdaftar - abaikan perintah dari', deviceId);
+      return false;
+    }
+
+    const daftarAlat: Array<{ id: string; nama: string; idAlat: string }> = JSON.parse(stored);
+    const isRegistered = daftarAlat.some(alat => alat.idAlat === deviceId);
+    
+    if (!isRegistered) {
+      console.log(`[App] Alat "${deviceId}" tidak terdaftar - abaikan perintah`);
+    } else {
+      console.log(`[App] Alat "${deviceId}" terdaftar - proses perintah`);
+    }
+    
+    return isRegistered;
+  } catch (err) {
+    console.error('[App] Error saat validasi device:', err);
+    return false;
+  }
+}
+
+/**
+ * Fungsi untuk mendapatkan nama alat dari AsyncStorage berdasarkan ID alat.
+ * Return nama alat jika ditemukan, atau ID alat jika tidak ditemukan.
+ */
+async function getDeviceName(deviceId: string | null): Promise<string> {
+  if (!deviceId) return 'Unknown Device';
+
+  try {
+    const stored = await AsyncStorage.getItem(STORAGE_KEY);
+    if (!stored) return deviceId;
+
+    const daftarAlat: Array<{ id: string; nama: string; idAlat: string }> = JSON.parse(stored);
+    const alat = daftarAlat.find(a => a.idAlat === deviceId);
+    
+    return alat?.nama ?? deviceId;
+  } catch (err) {
+    console.error('[App] Error saat mengambil nama device:', err);
+    return deviceId;
+  }
 }
 
 export default function App() {
@@ -89,6 +183,20 @@ export default function App() {
         const { _id, action, suhu, tekanan, sesi, status, device } = res.data;
         if (!action) return;
 
+        // Jika proses sedang dihentikan, abaikan data running/ignition/countdown dari alat
+        // Pengecekan ini harus dilakukan SEBELUM validasi device dan _id
+        if (isStoppingProcess && (action === 'countdown' || action === 'running' || action === 'ignition')) {
+          console.log(`[App] Proses sedang dihentikan - abaikan action "${action}" dari alat`);
+          return;
+        }
+
+        // Validasi: Hanya proses perintah dari alat yang terdaftar
+        const deviceRegistered = await isDeviceRegistered(device);
+        if (!deviceRegistered) {
+          // Alat tidak terdaftar - abaikan perintah
+          return;
+        }
+
         // Sudah diproses sebelumnya → skip
         if (_id && _id === lastRunningId.current) return;
         lastRunningId.current = _id ?? null;
@@ -98,13 +206,19 @@ export default function App() {
 
         console.log(`[App] Running action diterima: "${action}" (id: ${_id})`);
 
-        const params = activeProcessParams ?? {
-          namaAlat:     device ?? 'Unknown Device',
-          idAlat:       device ?? '-',
-          sterilDetik:  20 * 60,
-          inputSuhu:    suhu?.toString()     ?? '121',
-          inputTekanan: tekanan?.toString()  ?? '1.2',
-        };
+        // Jika activeProcessParams tidak ada, ambil nama alat dari AsyncStorage
+        let params = activeProcessParams;
+        if (!params) {
+          const namaAlat = await getDeviceName(device);
+          params = {
+            namaAlat:     namaAlat,
+            idAlat:       device ?? '-',
+            sterilDetik:  20 * 60,
+            inputSuhu:    suhu?.toString()     ?? '121',
+            inputTekanan: tekanan?.toString()  ?? '1.2',
+          };
+          console.log(`[App] Params dibuat dari device: ${device} → ${namaAlat}`);
+        }
 
         switch (action) {
           case 'countdown':
@@ -205,16 +319,44 @@ export default function App() {
         const nav = navigationRef.current;
         if (!nav || !nav.isReady()) return;
 
-        const { suhu, tekanan, waktu } = res.data;
+        // Jika sudah di FinishScreen, jangan navigasi lagi (hindari menimpa status "Dihentikan")
+        const currentRoute = nav.getCurrentRoute();
+        if (currentRoute?.name === 'FinishScreen') {
+          console.log('[App] Sudah di FinishScreen, skip navigasi finish dari backend');
+          return;
+        }
+
+        const { suhu, tekanan, waktu, device, action } = res.data;
         console.log('[App] Finish diterima dari sterilisasi/finish/last');
 
-        const params = activeProcessParams ?? {
-          namaAlat:     '-',
-          idAlat:       '-',
-          sterilDetik:  20 * 60,
-          inputSuhu:    suhu?.toString()     ?? '121',
-          inputTekanan: tekanan?.toString()  ?? '1.2',
-        };
+        // Validasi: Hanya proses perintah dari alat yang terdaftar
+        const deviceRegistered = await isDeviceRegistered(device);
+        if (!deviceRegistered) {
+          // Alat tidak terdaftar - abaikan perintah
+          return;
+        }
+
+        // Tentukan status berdasarkan action
+        // Jika action adalah "stop", maka status "Dihentikan"
+        // Jika action adalah "finish" atau tidak ada, maka status "Berhasil"
+        const finishStatus: 'Berhasil' | 'Dihentikan' = 
+          action === 'stop' ? 'Dihentikan' : 'Berhasil';
+        
+        console.log(`[App] Finish action: "${action}" → Status: ${finishStatus}`);
+
+        // Jika activeProcessParams tidak ada, ambil nama alat dari AsyncStorage
+        let params = activeProcessParams;
+        if (!params) {
+          const namaAlat = await getDeviceName(device);
+          params = {
+            namaAlat:     namaAlat,
+            idAlat:       device ?? '-',
+            sterilDetik:  20 * 60,
+            inputSuhu:    suhu?.toString()     ?? '121',
+            inputTekanan: tekanan?.toString()  ?? '1.2',
+          };
+          console.log(`[App] Params finish dibuat dari device: ${device} → ${namaAlat}`);
+        }
 
         nav.reset({
           index: 2,
@@ -237,11 +379,14 @@ export default function App() {
                 finishedAt: waktu ?? new Date().toLocaleTimeString('id-ID', {
                   hour: '2-digit', minute: '2-digit',
                 }),
-                status: 'Berhasil',
+                status: finishStatus,
               },
             },
           ],
         });
+        
+        // Reset flag stopping setelah berhasil navigasi ke FinishScreen
+        resetStoppingFlag();
       } catch {
         // Gagal polling — coba lagi di interval berikutnya
       }

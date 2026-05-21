@@ -28,6 +28,7 @@ import sharedStyles, {
 } from '../styles/ProcessScreen.styles';
 import { ProcessParams } from '../types/process';
 import { sendStop } from '../services/backendService';
+import { markProcessAsStopping } from '../App';
 
 const PHASES = [
   { key: 'set',       label: 'SET',     color: COLORS.accent },
@@ -127,12 +128,59 @@ export default function CountdownScreen({ route, navigation }: Props) {
 
   async function handleStop() {
     setStopping(true);
+    
+    // Tandai bahwa proses sedang dihentikan - polling akan mengabaikan data dari alat
+    markProcessAsStopping();
+    
     try {
       await sendStop(idAlat);
-    } catch {
-      // Gagal kirim — tetap kembali ke SetScreen
+      // Langsung navigasi ke FinishScreen seperti behavior saat stop dari backend
+      navigation.reset({
+        index: 2,
+        routes: [
+          { name: 'Dashboard' },
+          {
+            name: 'SetScreen',
+            params: route.params,
+          },
+          {
+            name: 'FinishScreen',
+            params: {
+              ...route.params,
+              finishedAt: new Date().toLocaleTimeString('id-ID', {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+              status: 'Dihentikan',
+            },
+          },
+        ],
+      });
+    } catch (err) {
+      // Gagal kirim stop - tetap navigasi ke FinishScreen
+      console.error('Gagal mengirim stop:', err);
+      navigation.reset({
+        index: 2,
+        routes: [
+          { name: 'Dashboard' },
+          {
+            name: 'SetScreen',
+            params: route.params,
+          },
+          {
+            name: 'FinishScreen',
+            params: {
+              ...route.params,
+              finishedAt: new Date().toLocaleTimeString('id-ID', {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+              status: 'Dihentikan',
+            },
+          },
+        ],
+      });
     }
-    navigation.navigate('SetScreen', route.params);
   }
 
   function renderSteps() {

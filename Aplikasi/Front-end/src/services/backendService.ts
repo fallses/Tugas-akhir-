@@ -1,4 +1,7 @@
-import { BACKEND_URL } from '../config';
+import Config from 'react-native-config';
+
+// Ambil BACKEND_URL langsung dari .env file
+const BACKEND_URL = Config.BACKEND_URL || 'https://backend-baglog-care.up.railway.app';
 
 // ── Tipe data dari sterilisasi/running ───────────────────────
 export interface RunningData {
@@ -16,6 +19,22 @@ export interface RunningData {
 export interface RunningResponse {
   status: string;
   data:   RunningData | null;
+}
+
+// ── Tipe data dari sterilisasi/manual ─────────────────────────
+export interface ManualData {
+  _id?:         string;
+  valve:        string | null;
+  gas:          string | null;
+  starter:      string | null;
+  suhureal:     number | null;
+  tekananreal:  number | null;
+  device:       string | null;
+}
+
+export interface ManualResponse {
+  status: string;
+  data:   ManualData | null;
 }
 
 // ── Tipe data dari sterilisasi/set ───────────────────────────
@@ -40,6 +59,7 @@ export interface FinishData {
   tekanan: number | null;
   waktu:   string | null;
   device:  string | null;
+  action?: string;        // "finish" | "stop" - untuk menentukan status
   createdAt?: string;
 }
 
@@ -62,7 +82,8 @@ export interface HistoryData {
   waktu:         string;
   finishSuhu:    number | null;
   finishTekanan: number | null;
-  status:        string;        // "selesai" | "stop"
+  action?:       string;        // "finish" | "stop" - dari database
+  status:        string;        // "selesai" | "stop" - fallback
   notes?:        string;
   createdAt:     string;
 }
@@ -78,6 +99,19 @@ export interface HistoryResponse {
  */
 export async function fetchLastRunning(): Promise<RunningResponse> {
   const res = await fetch(`${BACKEND_URL}/sterilisasi/running/last`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Ambil 1 data manual terbaru dari backend (suhureal & tekananreal).
+ * Endpoint: GET /sterilisasi/manual/last
+ */
+export async function fetchLastManual(): Promise<ManualResponse> {
+  const res = await fetch(`${BACKEND_URL}/sterilisasi/manual/last`, {
     method: 'GET',
     headers: { 'Content-Type': 'application/json' },
   });
