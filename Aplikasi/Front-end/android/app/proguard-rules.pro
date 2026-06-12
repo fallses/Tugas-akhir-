@@ -8,3 +8,9 @@
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
 # Add any project specific keep options here:
+
+# Notifee
+-keep class app.notifee.** { *; }
+-keep class io.invertase.notifee.** { *; }
+-keepclassmembers class io.invertase.notifee.** { *; }
+-dontwarn io.invertase.notifee.**

@@ -32,6 +32,13 @@ import { ProcessParams } from '../types/process';
 import { sendStop, fetchLastRunning, fetchLastSet } from '../services/backendService';
 import { POLL_INTERVAL_MS } from '../config';
 import { markProcessAsStopping } from '../App';
+import {
+  createNotificationChannel,
+  showSterilisasiProgress,
+  showSterilisasiComplete,
+  clearSterilisasiNotification,
+  requestNotificationPermission,
+} from '../services/notificationService';
 
 const PHASES = [
   { key: 'set',       label: 'SET',     color: COLORS.accent },
@@ -65,6 +72,7 @@ export default function RunningScreen({ route, navigation }: Props) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeIn    = useRef(new Animated.Value(0)).current;
   const initialTimerSet = useRef(false); // Flag untuk set total durasi sekali saja
+  const notificationInitialized = useRef(false); // Flag untuk inisialisasi notifikasi
 
   // Blokir tombol back hardware - user harus stop atau tunggu selesai
   useEffect(() => {
@@ -79,6 +87,25 @@ export default function RunningScreen({ route, navigation }: Props) {
   useEffect(() => {
     Animated.timing(fadeIn, { toValue: 1, duration: 400, useNativeDriver: true }).start();
   }, [fadeIn]);
+
+  // Inisialisasi notifikasi channel & request permission
+  useEffect(() => {
+    async function initNotification() {
+      try {
+        await requestNotificationPermission();
+        await createNotificationChannel();
+        notificationInitialized.current = true;
+      } catch (error) {
+        console.error('[RunningScreen] Gagal inisialisasi notifikasi:', error);
+      }
+    }
+    initNotification();
+
+    // Cleanup: hapus notifikasi saat unmount
+    return () => {
+      clearSterilisasiNotification().catch(console.error);
+    };
+  }, []);
 
   // Pulse animasi ikon
   useEffect(() => {
@@ -135,6 +162,26 @@ export default function RunningScreen({ route, navigation }: Props) {
     return () => clearInterval(interval);
   }, []);
 
+  // Update notifikasi setiap kali data berubah
+  useEffect(() => {
+    if (!notificationInitialized.current) return;
+    if (totalSeconds === 0) return; // Belum ada data durasi
+
+    const progress = totalSeconds > 0
+      ? Math.max(0, Math.min(1 - remainingSeconds / totalSeconds, 1))
+      : 0;
+
+    showSterilisasiProgress(
+      namaAlat,
+      formatTime(remainingSeconds),
+      progress,
+      realtimeSuhu,
+      realtimeTekanan
+    ).catch(error => {
+      console.error('[RunningScreen] Gagal update notifikasi:', error);
+    });
+  }, [remainingSeconds, realtimeSuhu, realtimeTekanan, totalSeconds, namaAlat]);
+
   // Ambil suhu & tekanan target dari /set/last (sekali saat masuk)
   useEffect(() => {
     async function loadSetData() {
@@ -156,6 +203,13 @@ export default function RunningScreen({ route, navigation }: Props) {
     
     // Tandai bahwa proses sedang dihentikan - polling akan mengabaikan data dari alat
     markProcessAsStopping();
+    
+    // Tampilkan notifikasi dihentikan
+    try {
+      await showSterilisasiComplete(namaAlat, 'Dihentikan');
+    } catch (error) {
+      console.error('[RunningScreen] Gagal tampilkan notifikasi dihentikan:', error);
+    }
     
     try {
       await sendStop(idAlat);

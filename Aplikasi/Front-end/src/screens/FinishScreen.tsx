@@ -25,6 +25,10 @@ import sharedStyles, {
 } from '../styles/ProcessScreen.styles';
 import { ProcessParams } from '../types/process';
 import { addHistory } from '../types/process';
+import {
+  showSterilisasiComplete,
+  clearSterilisasiNotification,
+} from '../services/notificationService';
 
 const PHASES = [
   { key: 'set',       label: 'SET',     color: COLORS.accent },
@@ -102,6 +106,14 @@ export default function FinishScreen({ route, navigation }: Props) {
       status,
     });
 
+    // Tampilkan notifikasi selesai (hanya jika status Berhasil)
+    // Status "Dihentikan" sudah ditampilkan dari RunningScreen
+    if (status === 'Berhasil') {
+      showSterilisasiComplete(namaAlat, 'Berhasil').catch(error => {
+        console.error('[FinishScreen] Gagal tampilkan notifikasi selesai:', error);
+      });
+    }
+
     // Animasi masuk
     Animated.timing(fadeIn, { toValue: 1, duration: 400, useNativeDriver: true }).start();
     Animated.spring(checkScale, {
@@ -110,6 +122,11 @@ export default function FinishScreen({ route, navigation }: Props) {
       tension: 50,
       friction: 5,
     }).start();
+
+    // Cleanup: hapus notifikasi saat unmount (user sudah melihat hasil)
+    return () => {
+      clearSterilisasiNotification().catch(console.error);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

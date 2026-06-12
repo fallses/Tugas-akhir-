@@ -29,6 +29,12 @@ import sharedStyles, {
 import { ProcessParams } from '../types/process';
 import { sendStop } from '../services/backendService';
 import { markProcessAsStopping } from '../App';
+import {
+  createNotificationChannel,
+  showCountdownNotification,
+  clearSterilisasiNotification,
+  requestNotificationPermission,
+} from '../services/notificationService';
 
 const PHASES = [
   { key: 'set',       label: 'SET',     color: COLORS.accent },
@@ -60,6 +66,26 @@ export default function CountdownScreen({ route, navigation }: Props) {
   const mulaiOpacity   = useRef(new Animated.Value(0)).current;
   const mulaiScale     = useRef(new Animated.Value(0.5)).current;
   const fadeIn         = useRef(new Animated.Value(0)).current;
+  const notificationInitialized = useRef(false);
+
+  // Inisialisasi notifikasi channel & request permission
+  useEffect(() => {
+    async function initNotification() {
+      try {
+        await requestNotificationPermission();
+        await createNotificationChannel();
+        notificationInitialized.current = true;
+      } catch (error) {
+        console.error('[CountdownScreen] Gagal inisialisasi notifikasi:', error);
+      }
+    }
+    initNotification();
+
+    // Cleanup: hapus notifikasi saat unmount
+    return () => {
+      clearSterilisasiNotification().catch(console.error);
+    };
+  }, []);
 
   // Blokir tombol back hardware - user harus stop atau tunggu selesai
   useEffect(() => {
@@ -118,9 +144,20 @@ export default function CountdownScreen({ route, navigation }: Props) {
           return 0;
         }
         animateTick();
+        
+        // Update notifikasi countdown
+        if (notificationInitialized.current) {
+          showCountdownNotification(namaAlat, prev - 1).catch(console.error);
+        }
+        
         return prev - 1;
       });
     }, 1000);
+
+    // Tampilkan notifikasi awal
+    if (notificationInitialized.current) {
+      showCountdownNotification(namaAlat, 3).catch(console.error);
+    }
 
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps

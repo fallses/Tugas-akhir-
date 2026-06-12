@@ -38,6 +38,10 @@ import sharedStyles, {
 import { ProcessParams } from '../types/process';
 import { sendStop } from '../services/backendService';
 import { markProcessAsStopping } from '../App';
+import {
+  showIgnitionNotification,
+  clearSterilisasiNotification,
+} from '../services/notificationService';
 
 const MAX_SESI = 3;
 
@@ -78,6 +82,13 @@ export default function IgnitionScreen({ route, navigation }: Props) {
   const fadeIn    = useRef(new Animated.Value(0)).current;
   const barAnim   = useRef(new Animated.Value(0)).current;
 
+  // Cleanup: hapus notifikasi saat unmount
+  useEffect(() => {
+    return () => {
+      clearSterilisasiNotification().catch(console.error);
+    };
+  }, []);
+
   // Blokir tombol back hardware - user harus stop atau tunggu selesai
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -91,6 +102,9 @@ export default function IgnitionScreen({ route, navigation }: Props) {
   useEffect(() => {
     // Jangan jalankan animasi jika gagal
     if (gagal) return;
+
+    // Update notifikasi ignition
+    showIgnitionNotification(namaAlat, sesi, MAX_SESI).catch(console.error);
 
     // Fade in
     fadeIn.setValue(0);

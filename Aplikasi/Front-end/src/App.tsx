@@ -37,6 +37,8 @@ import ManualControlScreen from './screens/ManualControlScreen';
 import { fetchLastRunning, fetchLastFinish } from './services/backendService';
 import { POLL_INTERVAL_MS } from './config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { requestNotificationPermission, createNotificationChannel } from './services/notificationService';
+import { Platform, PermissionsAndroid } from 'react-native';
 
 const STORAGE_KEY = '@daftar_alat';
 
@@ -159,6 +161,44 @@ export default function App() {
   const lastRunningId  = useRef<string | null>(null);
   // Polling pertama hanya untuk inisialisasi _id, tidak memproses navigasi
   const initializedRef = useRef(false);
+
+  // Request notification permission saat app start (Android 13+)
+  useEffect(() => {
+    async function setupNotifications() {
+      try {
+        console.log('[App] Setting up notifications...');
+        
+        // Android 13+ memerlukan runtime permission
+        if (Platform.OS === 'android' && Platform.Version >= 33) {
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+            {
+              title: 'Izin Notifikasi',
+              message: 'Aplikasi memerlukan izin untuk menampilkan notifikasi proses sterilisasi',
+              buttonNeutral: 'Tanya Nanti',
+              buttonNegative: 'Tolak',
+              buttonPositive: 'Izinkan',
+            }
+          );
+          
+          if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+            console.log('[App] ✅ Notification permission granted');
+          } else {
+            console.warn('[App] ⚠️ Notification permission denied');
+          }
+        }
+        
+        // Setup notification channel & request permission (iOS/older Android)
+        await requestNotificationPermission();
+        await createNotificationChannel();
+        console.log('[App] ✅ Notifications initialized');
+      } catch (error) {
+        console.error('[App] ❌ Failed to setup notifications:', error);
+      }
+    }
+    
+    setupNotifications();
+  }, []);
 
   useEffect(() => {
     // ── Polling /sterilisasi/running/last ────────────────────
