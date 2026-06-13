@@ -33,9 +33,9 @@ const PHASES = [
 ];
 
 const PRESETS = [
-  { label: 'Cepat',    jam: 2, menit: 0, suhu: 120, tekanan: 1.0 },
-  { label: 'Standar',  jam: 4, menit: 0, suhu: 120, tekanan: 2.0 },
-  { label: 'Intensif', jam: 6, menit: 0, suhu: 120, tekanan: 3.0 },
+  { label: 'Cepat',    jam: 2, menit: 0, suhu: 120, tekanan: 0.8 },
+  { label: 'Standar',  jam: 4, menit: 0, suhu: 120, tekanan: 0.8 },
+  { label: 'Intensif', jam: 6, menit: 0, suhu: 120, tekanan: 0.8 },
 ];
 
 interface Props {
@@ -63,7 +63,7 @@ export default function SetScreen({ route, navigation }: Props) {
   const [inputJam, setInputJam]         = useState('0');
   const [inputMenit, setInputMenit]     = useState('20');
   const [inputSuhu, setInputSuhu]       = useState(route.params.inputSuhu ?? '');
-  const [inputTekanan, setInputTekanan] = useState(route.params.inputTekanan ?? '');
+  const [inputTekanan, setInputTekanan] = useState('0.8'); // Fixed value: 0.8 bar
   const [waitingForBackend, setWaitingForBackend] = useState(false);
   const [isProcessActive, setIsProcessActive] = useState(false);
 
@@ -98,7 +98,7 @@ export default function SetScreen({ route, navigation }: Props) {
       setInputJam(jam.toString());
       setInputMenit(menit.toString());
       setInputSuhu(prefilledData.suhu);
-      setInputTekanan(prefilledData.tekanan);
+      // Tekanan tetap 0.8 bar, tidak diambil dari prefilledData
       setSelectedPreset(-1); // Reset preset selection
     }
   }, [prefilledData]);
@@ -131,7 +131,7 @@ export default function SetScreen({ route, navigation }: Props) {
   useEffect(() => {
     setActiveProcessParams(buildParams());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputJam, inputMenit, inputSuhu, inputTekanan]);
+  }, [inputJam, inputMenit, inputSuhu]); // Removed inputTekanan from dependencies
 
   function applyPreset(index: number) {
     setSelectedPreset(index);
@@ -139,7 +139,7 @@ export default function SetScreen({ route, navigation }: Props) {
     setInputJam(p.jam.toString());
     setInputMenit(p.menit.toString());
     setInputSuhu(p.suhu.toString());
-    setInputTekanan(p.tekanan.toString());
+    // Tekanan tetap 0.8 bar, tidak diubah dari preset
   }
 
   async function handleMulaiProses() {
@@ -405,20 +405,9 @@ export default function SetScreen({ route, navigation }: Props) {
                 <TextInput
                   style={[setStyles.paramInput, { minWidth: 44 }]}
                   value={inputTekanan}
-                  onChangeText={v => {
-                    const clean = v.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
-                    setInputTekanan(clean);
-                  }}
-                  onBlur={() => {
-                    if (inputTekanan === '' || inputTekanan === '.') {
-                      setInputTekanan(''); return; // Biarkan kosong
-                    }
-                    const num = parseFloat(inputTekanan);
-                    if (isNaN(num)) { setInputTekanan(''); return; }
-                    setInputTekanan(num.toFixed(1));
-                  }}
+                  editable={false}
                   keyboardType="decimal-pad"
-                  placeholder="0.0"
+                  placeholder="0.8"
                   placeholderTextColor={COLORS.muted}
                 />
                 <Text style={setStyles.paramUnit}>bar</Text>
