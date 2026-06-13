@@ -29,6 +29,7 @@ import {
   showSterilisasiComplete,
   clearSterilisasiNotification,
 } from '../services/notificationService';
+import { setProcessRunning } from '../App';
 
 const PHASES = [
   { key: 'set',       label: 'SET',     color: COLORS.accent },
@@ -75,6 +76,9 @@ export default function FinishScreen({ route, navigation }: Props) {
   // Simpan ke history saat screen ini pertama kali muncul
   useEffect(() => {
     const now = new Date();
+
+    // Reset flag process running - proses sudah selesai
+    setProcessRunning(false);
 
     // Waktu selesai
     const selesai = finishedAt ?? now.toLocaleTimeString('id-ID', {

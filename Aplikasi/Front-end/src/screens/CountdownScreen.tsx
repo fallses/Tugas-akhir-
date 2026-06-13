@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   BackHandler,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -28,7 +29,7 @@ import sharedStyles, {
 } from '../styles/ProcessScreen.styles';
 import { ProcessParams } from '../types/process';
 import { sendStop } from '../services/backendService';
-import { markProcessAsStopping } from '../App';
+import { markProcessAsStopping, setProcessRunning } from '../App';
 import {
   createNotificationChannel,
   showCountdownNotification,
@@ -81,20 +82,24 @@ export default function CountdownScreen({ route, navigation }: Props) {
     }
     initNotification();
 
+    // Set flag bahwa proses sedang running (countdown)
+    setProcessRunning(true, 'countdown');
+
     // Cleanup: hapus notifikasi saat unmount
     return () => {
       clearSterilisasiNotification().catch(console.error);
     };
   }, []);
 
-  // Blokir tombol back hardware - user harus stop atau tunggu selesai
+  // Allow back button - user bisa keluar ke SetScreen
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      // Return true = block back button
-      return true;
+      // Navigate ke SetScreen dengan params
+      navigation.navigate('SetScreen', route.params);
+      return true; // Return true = handled
     });
     return () => sub.remove();
-  }, []);
+  }, [navigation, route.params]);
 
   const enterFade = useCallback(() => {
     fadeIn.setValue(0);
@@ -168,6 +173,9 @@ export default function CountdownScreen({ route, navigation }: Props) {
     
     // Tandai bahwa proses sedang dihentikan - polling akan mengabaikan data dari alat
     markProcessAsStopping();
+    
+    // Reset flag process running
+    setProcessRunning(false);
     
     try {
       await sendStop(idAlat);
@@ -250,7 +258,13 @@ export default function CountdownScreen({ route, navigation }: Props) {
 
       {/* Top bar */}
       <View style={topBarStyles.container}>
-        <View style={{ width: 80 }} />
+        <Pressable
+          style={topBarStyles.backBtn}
+          onPress={() => navigation.navigate('SetScreen', route.params)}
+          hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+        >
+          <MaterialCommunityIcons name="arrow-left" size={18} color={COLORS.muted} />
+        </Pressable>
         <View style={topBarStyles.titleBlock}>
           <Text style={topBarStyles.title}>{namaAlat}</Text>
           <Text style={topBarStyles.subtitle}>ID: {idAlat}</Text>

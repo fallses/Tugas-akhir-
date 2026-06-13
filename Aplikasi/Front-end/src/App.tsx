@@ -60,6 +60,13 @@ let activeProcessParams: {
 } | null = null;
 
 /**
+ * Flag untuk track apakah ada proses sterilisasi yang sedang berjalan.
+ * Digunakan untuk mengubah tampilan tombol di SetScreen.
+ */
+let isProcessRunning = false;
+let currentProcessScreen: 'countdown' | 'ignition' | 'running' | null = null;
+
+/**
  * Flag untuk menandai bahwa proses sedang dihentikan.
  * Ketika true, polling akan mengabaikan data running/ignition/countdown dari alat.
  * Flag ini akan direset setelah beberapa detik atau saat masuk ke FinishScreen.
@@ -69,6 +76,24 @@ let stopTimeout: ReturnType<typeof setTimeout> | null = null;
 
 export function setActiveProcessParams(params: typeof activeProcessParams) {
   activeProcessParams = params;
+}
+
+export function getActiveProcessParams() {
+  return activeProcessParams;
+}
+
+export function setProcessRunning(running: boolean, screen?: 'countdown' | 'ignition' | 'running') {
+  isProcessRunning = running;
+  currentProcessScreen = running ? (screen ?? null) : null;
+  console.log('[App] Process running state:', running, 'screen:', currentProcessScreen);
+}
+
+export function getProcessRunning() {
+  return isProcessRunning;
+}
+
+export function getCurrentProcessScreen() {
+  return currentProcessScreen;
 }
 
 /**
@@ -212,6 +237,29 @@ export default function App() {
           if (res.status === 'success' && res.data?._id) {
             lastRunningId.current = res.data._id;
             console.log(`[App] Init: tandai _id lama (${res.data._id})`);
+            
+            // Set flag isProcessRunning jika ada proses aktif saat app pertama kali dibuka
+            const { action, device, suhu, tekanan } = res.data;
+            if ((action === 'countdown' || action === 'running' || action === 'ignition') && device) {
+              const deviceRegistered = await isDeviceRegistered(device);
+              if (deviceRegistered) {
+                // Set activeProcessParams jika belum ada
+                if (!activeProcessParams) {
+                  const namaAlat = await getDeviceName(device);
+                  activeProcessParams = {
+                    namaAlat:     namaAlat,
+                    idAlat:       device,
+                    sterilDetik:  20 * 60,
+                    inputSuhu:    suhu?.toString()     ?? '121',
+                    inputTekanan: tekanan?.toString()  ?? '1.2',
+                  };
+                  console.log(`[App] Init: Set activeProcessParams untuk ${device}`);
+                }
+                
+                setProcessRunning(true, action as any);
+                console.log(`[App] Init: Set flag running untuk ${action}`);
+              }
+            }
           } else {
             console.log('[App] Init: tidak ada data running lama');
           }
@@ -258,14 +306,77 @@ export default function App() {
             inputTekanan: tekanan?.toString()  ?? '1.2',
           };
           console.log(`[App] Params dibuat dari device: ${device} → ${namaAlat}`);
+        } else {
+          // activeProcessParams sudah ada, tapi update suhu/tekanan dari backend jika ada
+          if (suhu != null) {
+            params = { ...params, inputSuhu: suhu.toString() };
+            console.log(`[App] Update suhu set dari backend: ${suhu}`);
+          }
+          if (tekanan != null) {
+            params = { ...params, inputTekanan: tekanan.toString() };
+            console.log(`[App] Update tekanan set dari backend: ${tekanan}`);
+          }
         }
 
         switch (action) {
-          case 'countdown':
+          case 'countdown': {
+            const currentRoute = nav.getCurrentRoute();
+            
+            if (currentRoute?.name === 'Dashboard') {
+              console.log('[App] User di Dashboard - skip auto-navigate ke countdown');
+              // Set activeProcessParams dan flag untuk tombol hijau di Dashboard/SetScreen
+              activeProcessParams = params;  // Update dengan params yang sudah di-update dari backend
+              setProcessRunning(true, 'countdown');
+              break;
+            }
+            
+            if (currentRoute?.name === 'SetScreen') {
+              // Cek apakah user sudah pernah masuk proses (back dari proses)
+              const processScreen = getCurrentProcessScreen();
+              if (processScreen != null) {
+                console.log('[App] User di SetScreen (back dari proses) - skip auto-navigate ke countdown');
+                // Set activeProcessParams dan flag untuk tombol hijau di SetScreen
+                activeProcessParams = params;
+                setProcessRunning(true, 'countdown');
+                break;
+              }
+              // Jika processScreen === null, berarti baru mulai (sedang waiting) → navigate
+              console.log('[App] User di SetScreen (waiting/baru mulai) - navigate ke countdown');
+            }
+            
+            // Navigate dari screen proses lain atau dari SetScreen (waiting)
+            // Update activeProcessParams sebelum navigate
+            activeProcessParams = params;
             nav.navigate('CountdownScreen', params);
             break;
+          }
 
           case 'running': {
+            const currentRoute = nav.getCurrentRoute();
+            
+            if (currentRoute?.name === 'Dashboard') {
+              console.log('[App] User di Dashboard - skip auto-navigate ke running');
+              // Set activeProcessParams dan flag untuk tombol hijau di Dashboard/SetScreen
+              activeProcessParams = params;  // Update dengan params yang sudah di-update dari backend
+              setProcessRunning(true, 'running');
+              break;
+            }
+            
+            if (currentRoute?.name === 'SetScreen') {
+              // Cek apakah user sudah pernah masuk proses (back dari proses)
+              const processScreen = getCurrentProcessScreen();
+              if (processScreen != null) {
+                console.log('[App] User di SetScreen (back dari proses) - skip auto-navigate ke running');
+                // Set activeProcessParams dan flag untuk tombol hijau di SetScreen
+                activeProcessParams = params;
+                setProcessRunning(true, 'running');
+                break;
+              }
+              // Jika processScreen === null, berarti baru mulai (sedang waiting) → navigate
+              console.log('[App] User di SetScreen (waiting/baru mulai) - navigate ke running');
+            }
+            
+            // Navigate dari screen proses lain atau dari SetScreen (waiting)
             // Konversi waktu dari alat ("HH:MM") ke sterilDetik
             let sterilDetikFromAlat = params.sterilDetik;
             if (res.data.waktu != null) {
@@ -275,17 +386,48 @@ export default function App() {
                 if (!isNaN(secs) && secs > 0) sterilDetikFromAlat = secs;
               }
             }
-            nav.navigate('RunningScreen', {
+            
+            const runningParams = {
               ...params,
               sterilDetik: sterilDetikFromAlat,
               ...(suhu    != null && { inputSuhu:    suhu.toString() }),
               ...(tekanan != null && { inputTekanan: tekanan.toString() }),
-            });
+            };
+            
+            // Update activeProcessParams sebelum navigate
+            activeProcessParams = runningParams;
+            nav.navigate('RunningScreen', runningParams);
             break;
           }
 
           case 'ignition': {
             if (sesi == null) break;
+            
+            const currentRoute = nav.getCurrentRoute();
+            
+            if (currentRoute?.name === 'Dashboard') {
+              console.log('[App] User di Dashboard - skip auto-navigate ke ignition');
+              // Set activeProcessParams dan flag untuk tombol hijau di Dashboard/SetScreen
+              activeProcessParams = params;  // Update dengan params yang sudah di-update dari backend
+              setProcessRunning(true, 'ignition');
+              break;
+            }
+            
+            if (currentRoute?.name === 'SetScreen') {
+              // Cek apakah user sudah pernah masuk proses (back dari proses)
+              const processScreen = getCurrentProcessScreen();
+              if (processScreen != null) {
+                console.log('[App] User di SetScreen (back dari proses) - skip auto-navigate ke ignition');
+                // Set activeProcessParams dan flag untuk tombol hijau di SetScreen
+                activeProcessParams = params;
+                setProcessRunning(true, 'ignition');
+                break;
+              }
+              // Jika processScreen === null, berarti baru mulai (sedang waiting) → navigate
+              console.log('[App] User di SetScreen (waiting/baru mulai) - navigate ke ignition');
+            }
+            
+            // Navigate dari screen proses lain atau dari SetScreen (waiting) atau update params jika sudah di IgnitionScreen
             const ignitionParams = {
               ...params,
               sesi: parseInt(sesi, 10) || 1,
@@ -293,7 +435,10 @@ export default function App() {
                 ? 'api menyala'
                 : 'prosesing') as 'prosesing' | 'api menyala',
             };
-            const currentRoute = nav.getCurrentRoute();
+            
+            // Update activeProcessParams sebelum navigate/setParams
+            activeProcessParams = ignitionParams;
+            
             if (currentRoute?.name === 'IgnitionScreen') {
               nav.setParams(ignitionParams);
             } else {
@@ -304,7 +449,24 @@ export default function App() {
 
           case 'ignition_failed': {
             // Gagal menyalakan kompor setelah beberapa percobaan
-            console.log('[App] Ignition failed, tampilkan error screen');
+            console.log('[App] Ignition failed - proses gagal, reset flag');
+            
+            const currentRoute = nav.getCurrentRoute();
+            const currentScreen = currentRoute?.name;
+            
+            // Reset flag karena proses gagal (tombol kembali ke "Mulai Proses")
+            setProcessRunning(false);
+            resetStoppingFlag();
+            
+            // Skip auto-navigate jika user di Dashboard atau SetScreen
+            if (currentScreen === 'Dashboard' || currentScreen === 'SetScreen') {
+              console.log(`[App] User di ${currentScreen} - skip navigate ke ignition failed, hanya reset tombol`);
+              break;
+            }
+            
+            // Hanya navigate jika user sedang di screen proses lain (Countdown/Ignition/Running)
+            console.log(`[App] User di ${currentScreen} - navigate ke IgnitionScreen (failed)`);
+            
             // Backend mengirim percobaan di field sesi
             const percobaan = sesi ? parseInt(sesi, 10) : 3;
             const failedParams = {
@@ -312,8 +474,8 @@ export default function App() {
               sesi: percobaan,
               ignitionStatus: 'gagal' as const,
             };
-            const currentRoute = nav.getCurrentRoute();
-            if (currentRoute?.name === 'IgnitionScreen') {
+            
+            if (currentScreen === 'IgnitionScreen') {
               nav.setParams(failedParams);
             } else {
               nav.navigate('IgnitionScreen', failedParams);
@@ -322,8 +484,23 @@ export default function App() {
           }
 
           case 'stop': {
-            // Proses dihentikan — kembali ke SetScreen
-            console.log('[App] Proses dihentikan, kembali ke SetScreen');
+            // Proses dihentikan
+            console.log('[App] Proses dihentikan (action: stop)');
+            
+            // Cek screen saat ini
+            const currentRoute = nav.getCurrentRoute();
+            const currentScreen = currentRoute?.name;
+
+            // Jika user di Dashboard atau SetScreen → HANYA reset tombol (jangan navigate)
+            if (currentScreen === 'Dashboard' || currentScreen === 'SetScreen') {
+              console.log(`[App] User di ${currentScreen} - Reset tombol, skip navigate dari stop action`);
+              setProcessRunning(false);
+              resetStoppingFlag();
+              break;
+            }
+
+            // User di tempat lain → reset ke SetScreen
+            console.log('[App] User di screen lain, kembali ke SetScreen');
             nav.reset({
               index: 1,
               routes: [
@@ -331,6 +508,8 @@ export default function App() {
                 { name: 'SetScreen', params },
               ],
             });
+            setProcessRunning(false);
+            resetStoppingFlag();
             break;
           }
 
@@ -359,16 +538,8 @@ export default function App() {
         const nav = navigationRef.current;
         if (!nav || !nav.isReady()) return;
 
-        // Jika sudah di FinishScreen, jangan navigasi lagi (hindari menimpa status "Dihentikan")
-        const currentRoute = nav.getCurrentRoute();
-        if (currentRoute?.name === 'FinishScreen') {
-          console.log('[App] Sudah di FinishScreen, skip navigasi finish dari backend');
-          return;
-        }
-
         const { suhu, tekanan, waktu, device, action } = res.data;
-        console.log('[App] Finish diterima dari sterilisasi/finish/last');
-
+        
         // Validasi: Hanya proses perintah dari alat yang terdaftar
         const deviceRegistered = await isDeviceRegistered(device);
         if (!deviceRegistered) {
@@ -377,12 +548,31 @@ export default function App() {
         }
 
         // Tentukan status berdasarkan action
-        // Jika action adalah "stop", maka status "Dihentikan"
-        // Jika action adalah "finish" atau tidak ada, maka status "Berhasil"
         const finishStatus: 'Berhasil' | 'Dihentikan' = 
           action === 'stop' ? 'Dihentikan' : 'Berhasil';
         
-        console.log(`[App] Finish action: "${action}" → Status: ${finishStatus}`);
+        console.log(`[App] Finish diterima: "${action}" → Status: ${finishStatus}`);
+
+        // Cek screen saat ini
+        const currentRoute = nav.getCurrentRoute();
+        const currentScreen = currentRoute?.name;
+
+        // Jika user di Dashboard atau SetScreen → HANYA reset tombol (jangan navigate)
+        if (currentScreen === 'Dashboard' || currentScreen === 'SetScreen') {
+          console.log(`[App] User di ${currentScreen} - Reset tombol, skip navigate ke FinishScreen`);
+          setProcessRunning(false);
+          resetStoppingFlag();
+          return;
+        }
+
+        // Jika sudah di FinishScreen, jangan navigasi lagi (hindari menimpa status)
+        if (currentScreen === 'FinishScreen') {
+          console.log('[App] Sudah di FinishScreen, skip navigasi finish dari backend');
+          return;
+        }
+
+        // User di CountdownScreen/IgnitionScreen/RunningScreen → Navigate ke FinishScreen
+        console.log(`[App] User di ${currentScreen} - Navigate ke FinishScreen`);
 
         // Jika activeProcessParams tidak ada, ambil nama alat dari AsyncStorage
         let params = activeProcessParams;
@@ -426,7 +616,9 @@ export default function App() {
         });
         
         // Reset flag stopping setelah berhasil navigasi ke FinishScreen
+        setProcessRunning(false);
         resetStoppingFlag();
+        
       } catch {
         // Gagal polling — coba lagi di interval berikutnya
       }

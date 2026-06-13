@@ -21,7 +21,7 @@ import sharedStyles, {
   setStyles,
   bottomStyles,
 } from '../styles/ProcessScreen.styles';
-import { setActiveProcessParams } from '../App';
+import { setActiveProcessParams, getProcessRunning, getActiveProcessParams, getCurrentProcessScreen } from '../App';
 import { sendStart } from '../services/backendService';
 
 const PHASES = [
@@ -65,6 +65,27 @@ export default function SetScreen({ route, navigation }: Props) {
   const [inputSuhu, setInputSuhu]       = useState(route.params.inputSuhu ?? '');
   const [inputTekanan, setInputTekanan] = useState(route.params.inputTekanan ?? '');
   const [waitingForBackend, setWaitingForBackend] = useState(false);
+  const [isProcessActive, setIsProcessActive] = useState(false);
+
+  // Cek apakah ada proses yang sedang berjalan setiap kali screen difokus
+  useFocusEffect(
+    useCallback(() => {
+      const processRunning = getProcessRunning();
+      setIsProcessActive(processRunning);
+      console.log('[SetScreen] Process active:', processRunning);
+      
+      // Polling real-time untuk update status proses (setiap 1 detik)
+      const interval = setInterval(() => {
+        const currentRunning = getProcessRunning();
+        setIsProcessActive(currentRunning);
+      }, 1000);
+      
+      return () => {
+        setWaitingForBackend(false);
+        clearInterval(interval);
+      };
+    }, [])
+  );
 
   // Jika ada prefilledData dari history, isi field-field
   useEffect(() => {
@@ -139,6 +160,32 @@ export default function SetScreen({ route, navigation }: Props) {
     }
   }
 
+  function handleBackToProcess() {
+    // Ambil params dari global state (data proses yang sedang berjalan)
+    const activeParams = getActiveProcessParams();
+    const currentScreen = getCurrentProcessScreen();
+    
+    // Tentukan screen mana yang harus dibuka berdasarkan screen terakhir
+    let targetScreen: string = 'RunningScreen'; // Default
+    
+    if (currentScreen === 'countdown') {
+      targetScreen = 'CountdownScreen';
+    } else if (currentScreen === 'ignition') {
+      targetScreen = 'IgnitionScreen';
+    } else if (currentScreen === 'running') {
+      targetScreen = 'RunningScreen';
+    }
+    
+    if (activeParams) {
+      // Navigate ke screen yang sesuai dengan params yang tersimpan
+      navigation.navigate(targetScreen, activeParams);
+    } else {
+      // Fallback: buat params dari input saat ini
+      const params = buildParams();
+      navigation.navigate(targetScreen, params);
+    }
+  }
+
   function handleBatalTunggu() {
     setWaitingForBackend(false);
   }
@@ -184,9 +231,7 @@ export default function SetScreen({ route, navigation }: Props) {
         <View style={{ width: 80, alignItems: 'flex-start' }}>
           <Pressable
             style={topBarStyles.backBtn}
-            onPress={() =>
-              navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Dashboard')
-            }
+            onPress={() => navigation.navigate('Dashboard')}
             hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
           >
             <MaterialCommunityIcons name="arrow-left" size={18} color={COLORS.muted} />
@@ -381,21 +426,46 @@ export default function SetScreen({ route, navigation }: Props) {
             </View>
           </View>
 
+          {/* Tombol Mulai Proses / Kembali ke Proses */}
           <TouchableOpacity
-            style={[setStyles.startBtn, waitingForBackend && { opacity: 0.4 }]}
-            onPress={handleMulaiProses}
+            style={[
+              setStyles.startBtn,
+              waitingForBackend && { opacity: 0.4 },
+              isProcessActive && { backgroundColor: COLORS.green }
+            ]}
+            onPress={isProcessActive ? handleBackToProcess : handleMulaiProses}
             disabled={waitingForBackend}
           >
-            <MaterialCommunityIcons name="play" size={18} color={COLORS.bg} />
-            <Text style={setStyles.startBtnText}>Mulai Proses</Text>
+            <MaterialCommunityIcons 
+              name={isProcessActive ? "arrow-right" : "play"} 
+              size={18} 
+              color={COLORS.bg} 
+            />
+            <Text style={setStyles.startBtnText}>
+              {isProcessActive ? 'Proses Sterilisasi Berjalan' : 'Mulai Proses'}
+            </Text>
           </TouchableOpacity>
 
+          {/* Tombol Kontrol Manual - disabled saat proses running */}
           <TouchableOpacity
-            style={setStyles.manualBtn}
+            style={[
+              setStyles.manualBtn,
+              isProcessActive && { opacity: 0.4, backgroundColor: COLORS.dim }
+            ]}
             onPress={() => navigation.navigate('ManualControl', { namaAlat, idAlat })}
+            disabled={isProcessActive}
           >
-            <MaterialCommunityIcons name="tune-variant" size={18} color={COLORS.muted} />
-            <Text style={setStyles.manualBtnText}>Kontrol Manual</Text>
+            <MaterialCommunityIcons 
+              name="tune-variant" 
+              size={18} 
+              color={isProcessActive ? COLORS.dim : COLORS.muted} 
+            />
+            <Text style={[
+              setStyles.manualBtnText,
+              isProcessActive && { color: COLORS.dim }
+            ]}>
+              Kontrol Manual
+            </Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>

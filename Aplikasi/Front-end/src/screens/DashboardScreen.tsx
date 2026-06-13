@@ -10,9 +10,11 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import styles from '../styles/DashboardScreen.styles';
+import { getProcessRunning, getActiveProcessParams } from '../App';
 
 const STORAGE_KEY = '@daftar_alat';
 
@@ -46,6 +48,9 @@ export default function DashboardScreen({ navigation }: Props) {
   const [inputId, setInputId]     = useState('');
   const [namaError, setNamaError] = useState('');
   const [idError, setIdError]     = useState('');
+  
+  // State untuk track proses yang sedang berjalan
+  const [runningDeviceId, setRunningDeviceId] = useState<string | null>(null);
 
   // ── Load dari AsyncStorage saat pertama kali mount
   useEffect(() => {
@@ -61,6 +66,31 @@ export default function DashboardScreen({ navigation }: Props) {
     }
     loadAlat();
   }, []);
+
+  // ── Check status proses saat screen fokus + polling setiap 500ms
+  useFocusEffect(
+    useCallback(() => {
+      function checkProcessStatus() {
+        const isRunning = getProcessRunning();
+        const params = getActiveProcessParams();
+        
+        if (isRunning && params?.idAlat) {
+          setRunningDeviceId(params.idAlat);
+          console.log('[Dashboard] Proses berjalan untuk alat:', params.idAlat);
+        } else {
+          setRunningDeviceId(null);
+        }
+      }
+
+      // Check immediately saat fokus
+      checkProcessStatus();
+
+      // Polling setiap 500ms untuk update real-time (lebih responsif)
+      const interval = setInterval(checkProcessStatus, 500);
+
+      return () => clearInterval(interval);
+    }, [])
+  );
 
   // ── Simpan ke AsyncStorage setiap kali daftarAlat berubah
   const saveAlat = useCallback(async (list: Alat[]) => {
@@ -153,6 +183,8 @@ export default function DashboardScreen({ navigation }: Props) {
   }
 
   function renderItem({ item }: { item: Alat }) {
+    const isRunning = runningDeviceId === item.idAlat;
+    
     return (
       <TouchableOpacity
         style={styles.alatCard}
@@ -166,12 +198,25 @@ export default function DashboardScreen({ navigation }: Props) {
         delayLongPress={500}
       >
         <View style={styles.alatLeft}>
-          <View style={[styles.alatIcon, styles.alatIconOff]}>
+          <View style={[styles.alatIcon, isRunning ? styles.alatIconOn : styles.alatIconOff]}>
             <MaterialCommunityIcons name="chip" size={22} color="#00E5FF" />
           </View>
           <View>
             <Text style={styles.alatNama}>{item.nama}</Text>
             <Text style={styles.alatId}>ID: {item.idAlat}</Text>
+            {isRunning && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                <MaterialCommunityIcons name="circle" size={8} color="#4CAF50" />
+                <Text style={{
+                  fontSize: 11,
+                  color: '#4CAF50',
+                  fontWeight: '600',
+                  marginLeft: 4,
+                }}>
+                  Menjalankan Sterilisasi
+                </Text>
+              </View>
+            )}
           </View>
         </View>
         <MaterialCommunityIcons name="chevron-right" size={20} color="#4A5E78" />
