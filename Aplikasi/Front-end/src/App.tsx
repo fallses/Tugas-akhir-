@@ -184,6 +184,8 @@ export default function App() {
   const pollFinishRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   // Tracking _id running terakhir yang sudah diproses — cegah trigger duplikat
   const lastRunningId  = useRef<string | null>(null);
+  // Tracking _id finish terakhir — untuk mengabaikan data running yang sudah selesai
+  const lastFinishId   = useRef<string | null>(null);
   // Polling pertama hanya untuk inisialisasi _id, tidak memproses navigasi
   const initializedRef = useRef(false);
 
@@ -240,6 +242,16 @@ export default function App() {
             
             // Set flag isProcessRunning jika ada proses aktif saat app pertama kali dibuka
             const { action, device, suhu, tekanan } = res.data;
+            
+            // PENTING: Jika action adalah 'stop' atau 'finish', berarti proses sudah selesai
+            // Jangan set flag running
+            if (action === 'stop' || action === 'finish') {
+              console.log(`[App] Init: Action "${action}" ditemukan, reset flag (proses sudah selesai)`);
+              setProcessRunning(false);
+              activeProcessParams = null;
+              return;
+            }
+            
             if ((action === 'countdown' || action === 'running' || action === 'ignition') && device) {
               const deviceRegistered = await isDeviceRegistered(device);
               if (deviceRegistered) {
@@ -258,18 +270,60 @@ export default function App() {
                 
                 setProcessRunning(true, action as any);
                 console.log(`[App] Init: Set flag running untuk ${action}`);
+              } else {
+                // Device tidak terdaftar, reset flag
+                setProcessRunning(false);
+                activeProcessParams = null;
+                console.log('[App] Init: Device tidak terdaftar, reset flag');
               }
+            } else {
+              // Tidak ada proses aktif, reset flag
+              setProcessRunning(false);
+              activeProcessParams = null;
+              console.log('[App] Init: Tidak ada proses aktif, reset flag');
             }
           } else {
-            console.log('[App] Init: tidak ada data running lama');
+            console.log('[App] Init: tidak ada data running lama, reset flag');
+            // Tidak ada data running, pastikan flag di-reset
+            setProcessRunning(false);
+            activeProcessParams = null;
           }
           return;
         }
 
-        if (res.status !== 'success' || !res.data) return;
+        if (res.status !== 'success' || !res.data) {
+          // Jika tidak ada data atau status tidak success, kemungkinan proses sudah selesai
+          // Reset flag jika sebelumnya ada proses yang berjalan
+          if (isProcessRunning) {
+            console.log('[App] Tidak ada data running dari backend, reset flag');
+            setProcessRunning(false);
+            activeProcessParams = null;
+          }
+          return;
+        }
 
         const { _id, action, suhu, tekanan, sesi, status, device } = res.data;
-        if (!action) return;
+        if (!action) {
+          // Jika tidak ada action, kemungkinan proses sudah selesai
+          // Reset flag jika sebelumnya ada proses yang berjalan
+          if (isProcessRunning) {
+            console.log('[App] Tidak ada action dari backend, reset flag');
+            setProcessRunning(false);
+            activeProcessParams = null;
+          }
+          return;
+        }
+
+        // PENTING: Jika action adalah 'stop' atau 'finish', berarti proses sudah selesai
+        // Reset flag dan jangan proses lebih lanjut
+        if (action === 'stop' || action === 'finish') {
+          if (isProcessRunning) {
+            console.log(`[App] Action "${action}" diterima, reset flag (proses sudah selesai)`);
+            setProcessRunning(false);
+            activeProcessParams = null;
+          }
+          return;
+        }
 
         // Jika proses sedang dihentikan, abaikan data running/ignition/countdown dari alat
         // Pengecekan ini harus dilakukan SEBELUM validasi device dan _id
