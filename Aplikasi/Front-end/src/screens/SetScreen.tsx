@@ -62,7 +62,7 @@ export default function SetScreen({ route, navigation }: Props) {
   const [selectedPreset, setSelectedPreset] = useState(1);
   const [inputJam, setInputJam]         = useState('0');
   const [inputMenit, setInputMenit]     = useState('20');
-  const [inputSuhu, setInputSuhu]       = useState(route.params.inputSuhu ?? '');
+  const [inputSuhu, setInputSuhu]       = useState('120'); // Tetap 120°C, tidak bisa diubah
   const [inputTekanan, setInputTekanan] = useState(route.params.inputTekanan ?? '');
   const [waitingForBackend, setWaitingForBackend] = useState(false);
 
@@ -76,7 +76,8 @@ export default function SetScreen({ route, navigation }: Props) {
       
       setInputJam(jam.toString());
       setInputMenit(menit.toString());
-      setInputSuhu(prefilledData.suhu);
+      // Suhu tetap 120°C, tidak menggunakan data dari history
+      // setInputSuhu(prefilledData.suhu);
       setInputTekanan(prefilledData.tekanan);
       setSelectedPreset(-1); // Reset preset selection
     }
@@ -117,7 +118,8 @@ export default function SetScreen({ route, navigation }: Props) {
     const p = PRESETS[index];
     setInputJam(p.jam.toString());
     setInputMenit(p.menit.toString());
-    setInputSuhu(p.suhu.toString());
+    // Suhu tetap 120°C, tidak berubah saat memilih preset
+    // setInputSuhu(p.suhu.toString());
     setInputTekanan(p.tekanan.toString());
   }
 
@@ -323,24 +325,16 @@ export default function SetScreen({ route, navigation }: Props) {
                 <MaterialCommunityIcons name="thermometer-high" size={18} color={COLORS.fire} />
                 <View>
                   <Text style={setStyles.paramName}>Suhu Target</Text>
+                  <Text style={{ color: COLORS.muted, fontSize: 10, marginTop: 1 }}>Tetap 120°C</Text>
                 </View>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <TextInput
                   style={[setStyles.paramInput, { color: COLORS.fire, minWidth: 44 }]}
                   value={inputSuhu}
-                  onChangeText={v => {
-                    const raw = v.replace(/[^0-9]/g, '');
-                    setInputSuhu(raw);
-                  }}
-                  onBlur={() => {
-                    if (inputSuhu === '') return; // Biarkan kosong
-                    const num = parseInt(inputSuhu, 10);
-                    if (isNaN(num)) { setInputSuhu(''); return; }
-                    setInputSuhu(num.toString());
-                  }}
+                  editable={false} // Tidak bisa diubah
                   keyboardType="numeric"
-                  placeholder="0"
+                  placeholder="120"
                   placeholderTextColor={COLORS.muted}
                 />
                 <Text style={setStyles.paramUnit}>°C</Text>
