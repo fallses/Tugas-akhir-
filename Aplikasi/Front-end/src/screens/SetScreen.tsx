@@ -63,7 +63,7 @@ export default function SetScreen({ route, navigation }: Props) {
   const [inputJam, setInputJam]         = useState('0');
   const [inputMenit, setInputMenit]     = useState('20');
   const [inputSuhu, setInputSuhu]       = useState(route.params.inputSuhu ?? '');
-  const [inputTekanan, setInputTekanan] = useState(route.params.inputTekanan ?? '');
+  const [inputTekanan, setInputTekanan] = useState('0.3'); // Tetap 0.3 bar, tidak bisa diubah
   const [waitingForBackend, setWaitingForBackend] = useState(false);
 
   // Jika ada prefilledData dari history, isi field-field
@@ -77,7 +77,8 @@ export default function SetScreen({ route, navigation }: Props) {
       setInputJam(jam.toString());
       setInputMenit(menit.toString());
       setInputSuhu(prefilledData.suhu);
-      setInputTekanan(prefilledData.tekanan);
+      // Tekanan tetap 0.3 bar, tidak menggunakan data dari history
+      // setInputTekanan(prefilledData.tekanan);
       setSelectedPreset(-1); // Reset preset selection
     }
   }, [prefilledData]);
@@ -118,7 +119,8 @@ export default function SetScreen({ route, navigation }: Props) {
     setInputJam(p.jam.toString());
     setInputMenit(p.menit.toString());
     setInputSuhu(p.suhu.toString());
-    setInputTekanan(p.tekanan.toString());
+    // Tekanan tetap 0.3 bar, tidak berubah saat memilih preset
+    // setInputTekanan(p.tekanan.toString());
   }
 
   async function handleMulaiProses() {
@@ -354,26 +356,16 @@ export default function SetScreen({ route, navigation }: Props) {
                 <MaterialCommunityIcons name="gauge" size={18} color={COLORS.accent} />
                 <View>
                   <Text style={setStyles.paramName}>Tekanan Target</Text>
+                  <Text style={{ color: COLORS.muted, fontSize: 10, marginTop: 1 }}>Tetap 0.3 bar</Text>
                 </View>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <TextInput
-                  style={[setStyles.paramInput, { minWidth: 44 }]}
+                  style={[setStyles.paramInput, { minWidth: 44, color: COLORS.white, opacity: 1 }]}
                   value={inputTekanan}
-                  onChangeText={v => {
-                    const clean = v.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
-                    setInputTekanan(clean);
-                  }}
-                  onBlur={() => {
-                    if (inputTekanan === '' || inputTekanan === '.') {
-                      setInputTekanan(''); return; // Biarkan kosong
-                    }
-                    const num = parseFloat(inputTekanan);
-                    if (isNaN(num)) { setInputTekanan(''); return; }
-                    setInputTekanan(num.toFixed(1));
-                  }}
+                  editable={false} // Tidak bisa diubah
                   keyboardType="decimal-pad"
-                  placeholder="0.0"
+                  placeholder="0.3"
                   placeholderTextColor={COLORS.muted}
                 />
                 <Text style={setStyles.paramUnit}>bar</Text>
