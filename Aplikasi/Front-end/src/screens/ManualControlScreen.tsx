@@ -6,9 +6,11 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import { LineChart } from 'react-native-chart-kit';
 import sharedStyles, {
   COLORS,
   topBarStyles,
@@ -45,6 +47,17 @@ export default function ManualControlScreen({ route, navigation }: Props) {
   const [tekanan,        setTekanan]        = useState<number | null>(null);
   const [monitorLoading, setMonitorLoading] = useState(true);
 
+  // ── Data untuk grafik (menyimpan history 20 data point terakhir) ──
+  const [suhuData,    setSuhuData]    = useState<number[]>([0]);
+  const [tekananData, setTekananData] = useState<number[]>([0]);
+  const [labels,      setLabels]      = useState<string[]>(['0s']);
+  const dataPointCounter = useRef(0);
+  const MAX_DATA_POINTS = 20;
+  
+  // Tracking nilai terakhir untuk deteksi perubahan
+  const lastSuhuValue = useRef<number | null>(null);
+  const lastTekananValue = useRef<number | null>(null);
+
   // Ref untuk debounce timer
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -59,9 +72,77 @@ export default function ManualControlScreen({ route, navigation }: Props) {
       try {
         const res = await fetchLastManual();
         if (res.status === 'success' && res.data) {
+          console.log('[Chart] Polling data:', { suhu: res.data.suhureal, tekanan: res.data.tekananreal });
+          
+          let suhuChanged = false;
+          let tekananChanged = false;
+          
           // Update suhu & tekanan
-          if (res.data.suhureal    != null) setSuhu(res.data.suhureal);
-          if (res.data.tekananreal != null) setTekanan(res.data.tekananreal);
+          if (res.data.suhureal != null) {
+            setSuhu(res.data.suhureal);
+            
+            // Deteksi perubahan suhu
+            if (lastSuhuValue.current !== res.data.suhureal) {
+              console.log(`[Chart] Suhu berubah: ${lastSuhuValue.current} → ${res.data.suhureal}`);
+              lastSuhuValue.current = res.data.suhureal;
+              suhuChanged = true;
+            }
+          }
+          
+          if (res.data.tekananreal != null) {
+            setTekanan(res.data.tekananreal);
+            
+            // Deteksi perubahan tekanan
+            if (lastTekananValue.current !== res.data.tekananreal) {
+              console.log(`[Chart] Tekanan berubah: ${lastTekananValue.current} → ${res.data.tekananreal}`);
+              lastTekananValue.current = res.data.tekananreal;
+              tekananChanged = true;
+            }
+          }
+
+          // Jika ada perubahan pada salah satu atau keduanya, update grafik
+          if (suhuChanged || tekananChanged) {
+            console.log(`[Chart] ✅ GRAFIK UPDATE! - Suhu: ${suhuChanged ? 'YA' : 'TIDAK'}, Tekanan: ${tekananChanged ? 'YA' : 'TIDAK'}`);
+            console.log(`[Chart] Nilai terbaru - Suhu: ${lastSuhuValue.current}°C, Tekanan: ${lastTekananValue.current} bar`);
+            
+            // Update data suhu (gunakan nilai terbaru atau nilai terakhir jika tidak berubah)
+            setSuhuData(prev => {
+              const currentValue = lastSuhuValue.current ?? 0;
+              const newData = prev.length === 1 && prev[0] === 0 
+                ? [currentValue] // Initial data
+                : [...prev, currentValue]; // Tambah data baru
+              const trimmed = newData.length > MAX_DATA_POINTS ? newData.slice(-MAX_DATA_POINTS) : newData;
+              console.log(`[Chart] Suhu data points: ${trimmed.length}`, trimmed);
+              return trimmed;
+            });
+            
+            // Update data tekanan (gunakan nilai terbaru atau nilai terakhir jika tidak berubah)
+            setTekananData(prev => {
+              const currentValue = lastTekananValue.current ?? 0;
+              const newData = prev.length === 1 && prev[0] === 0 
+                ? [currentValue] // Initial data
+                : [...prev, currentValue]; // Tambah data baru
+              const trimmed = newData.length > MAX_DATA_POINTS ? newData.slice(-MAX_DATA_POINTS) : newData;
+              console.log(`[Chart] Tekanan data points: ${trimmed.length}`, trimmed);
+              return trimmed;
+            });
+            
+            // Update label waktu
+            dataPointCounter.current += 1;
+            const now = new Date();
+            const timeLabel = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+            
+            setLabels(prev => {
+              const newLabels = prev.length === 1 && prev[0] === '0s'
+                ? [timeLabel] // Initial label
+                : [...prev, timeLabel]; // Tambah label baru
+              const trimmed = newLabels.length > MAX_DATA_POINTS ? newLabels.slice(-MAX_DATA_POINTS) : newLabels;
+              console.log(`[Chart] Labels: ${trimmed.length}`, trimmed);
+              return trimmed;
+            });
+          } else {
+            console.log('[Chart] ⏸️  Tidak ada perubahan data, grafik tidak diupdate');
+          }
           
           // Update status aktuator dari alat (realtime)
           if (res.data.valve != null) {
@@ -88,15 +169,21 @@ export default function ManualControlScreen({ route, navigation }: Props) {
             }
           }
         }
-      } catch {
-        // Gagal polling — coba lagi di interval berikutnya
+      } catch (err) {
+        console.error('[Chart] Error polling:', err);
       } finally {
         setMonitorLoading(false);
       }
     }
+    
+    // Run poll immediately on mount
+    console.log('[Chart] 🚀 Memulai polling data sensor...');
     poll();
     const interval = setInterval(poll, POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
+    return () => {
+      console.log('[Chart] 🛑 Berhenti polling data sensor');
+      clearInterval(interval);
+    };
   }, []);
 
   // ── Kirim ke backend ──────────────────────────────────
@@ -288,6 +375,78 @@ export default function ManualControlScreen({ route, navigation }: Props) {
               )}
               <Text style={styles.monitorUnit}>bar</Text>
             </View>
+          </View>
+        </View>
+
+        {/* Grafik Perubahan Suhu dan Tekanan */}
+        <View style={styles.chartCard}>
+          <View style={styles.chartHeader}>
+            <MaterialCommunityIcons name="chart-areaspline" size={16} color={COLORS.muted} />
+            <Text style={styles.chartTitle}>Grafik Perubahan</Text>
+          </View>
+
+          {/* Legend */}
+          <View style={styles.chartLegend}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: COLORS.fire }]} />
+              <Text style={styles.legendText}>Suhu (°C)</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: COLORS.accent }]} />
+              <Text style={styles.legendText}>Tekanan (bar)</Text>
+            </View>
+          </View>
+
+          {/* Grafik Gabungan */}
+          <View style={styles.chartSection}>
+            <LineChart
+              data={{
+                labels: labels.length > 6 ? labels.filter((_, i) => i % Math.ceil(labels.length / 6) === 0) : labels,
+                datasets: [
+                  {
+                    data: suhuData.length > 0 ? suhuData : [0],
+                    color: () => COLORS.fire,
+                    strokeWidth: 2,
+                  },
+                  {
+                    data: tekananData.length > 0 ? tekananData : [0],
+                    color: () => COLORS.accent,
+                    strokeWidth: 2,
+                  },
+                ],
+                legend: ['Suhu (°C)', 'Tekanan (bar)'],
+              }}
+              width={Dimensions.get('window').width - 64}
+              height={220}
+              chartConfig={{
+                backgroundColor: COLORS.cardBg,
+                backgroundGradientFrom: COLORS.cardBg,
+                backgroundGradientTo: COLORS.cardBg,
+                decimalPlaces: 1,
+                color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+                labelColor: () => COLORS.muted,
+                style: { borderRadius: 12 },
+                propsForDots: {
+                  r: '4',
+                  strokeWidth: '2',
+                },
+                propsForBackgroundLines: {
+                  strokeDasharray: '',
+                  stroke: COLORS.border,
+                  strokeWidth: 1,
+                },
+              }}
+              bezier
+              style={styles.chart}
+              withInnerLines={true}
+              withOuterLines={true}
+              withVerticalLines={false}
+              withHorizontalLines={true}
+              withVerticalLabels={true}
+              withHorizontalLabels={true}
+              withDots={true}
+              withShadow={false}
+            />
           </View>
         </View>
 

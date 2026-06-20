@@ -1,7 +1,7 @@
 require("dotenv").config();
 const mqtt   = require("mqtt");
 const broker = "mqtt://broker.hivemq.com";
-const { Set, Running, Finish } = require("../models/sterilisasi");
+const { Set, Running, Finish, Manual } = require("../models/sterilisasi");
 
 /**
  * TOPIK MQTT:
@@ -10,22 +10,25 @@ const { Set, Running, Finish } = require("../models/sterilisasi");
  *   sterilisasi/running  — respon proses (countdown, running, ignition)
  *   sterilisasi/finish   — sinyal selesai dari perangkat
  *   sterilisasi/set      — logging perintah yang dikirim ke perangkat
+ *   sterilisasi/manual   — logging perintah manual control
  *
  * PUBLISH (mengirim ke perangkat):
  *   sterilisasi/set      — perintah start dari aplikasi
- *   sterilisasi/running  — perintah stop dari aplikasi
+ *   sterilisasi/finish   — perintah stop dari aplikasi
+ *   sterilisasi/manual   — perintah manual control (valve, gas, starter)
  */
 
 const SUBSCRIBE_TOPIC = "sterilisasi/running";
 const FINISH_TOPIC    = "sterilisasi/finish";
 const SET_TOPIC       = "sterilisasi/set";
-const PUBLISH_TOPIC   = "sterilisasi/set";
 const MANUAL_TOPIC    = "sterilisasi/manual";
+const PUBLISH_TOPIC   = "sterilisasi/set";
 
 const client = mqtt.connect(broker);
 
 let lastData       = null;
 let lastFinishData = null;
+let lastManualData = null; // Data manual control terbaru
 let finishConsumed = false;
 let finishTimestamp = null; // Timestamp kapan finish diterima
 const FINISH_LOCK_DURATION = 5000; // 5 detik setelah finish, abaikan running
@@ -45,6 +48,11 @@ client.on("connect", () => {
 
   client.subscribe(SET_TOPIC, (err) => {
     if (!err) console.log("Subscribe ke topic:", SET_TOPIC);
+    else console.error("Gagal subscribe:", err.message);
+  });
+
+  client.subscribe(MANUAL_TOPIC, (err) => {
+    if (!err) console.log("Subscribe ke topic:", MANUAL_TOPIC);
     else console.error("Gagal subscribe:", err.message);
   });
 });
@@ -85,70 +93,68 @@ client.on("message", async (receivedTopic, message) => {
 
   // ── Topik sterilisasi/finish ──────────────────────────────
   if (receivedTopic === FINISH_TOPIC) {
-    const finishAction = data.action ?? null;
-    const device = data.Device ?? data.device ?? null;
-
-    // Alat kirim action "stop" melalui topik finish → perlakukan sebagai stop
-    if (finishAction === "stop") {
-      console.log(`[sterilisasi/finish] Menerima action STOP dari alat (device: ${device})`);
-      lastData = {
-        action:  "stop",
-        suhu:    data.suhu    ?? null,
-        tekanan: data.tekanan ?? null,
-        waktu:   null,
-        timer:   null,
-        device,
-        sesi:    null,
-        status:  null,
-      };
-      console.log("lastData diperbarui dengan action stop (dari alat via finish):", lastData);
-      try {
-        await new Running(lastData).save();
-        // Simpan juga ke Finish dengan status "stop" agar masuk history
-        await new Finish({
-          suhu:    data.suhu    ?? null,
-          tekanan: data.tekanan ?? null,
-          waktu:   null,
-          device,
-          status:  "stop",
-        }).save();
-        console.log("[sterilisasi/finish] Stop disimpan ke Running & Finish");
-      } catch (error) {
-        console.error("[sterilisasi/finish] Gagal simpan stop:", error.message);
-      }
-      return;
-    }
-
-    // Sinyal finish normal (tanpa action atau action bukan "stop")
+    const action = data.action ?? "finish"; // Default action adalah "finish"
+    
     lastFinishData = {
+      action:  action, // Bisa "finish" atau "stop"
       suhu:    data.suhu    ?? null,
       tekanan: data.tekanan ?? null,
       waktu:   data.waktu   ?? null,
-      device,
+      device:  data.Device  ?? data.device ?? null,
     };
-    finishConsumed  = false;
-    finishTimestamp = Date.now();
-    console.log("lastFinishData diperbarui:", lastFinishData);
-
-    // Update lastData agar frontend bisa detect action finish
+    finishConsumed = false;
+    finishTimestamp = Date.now(); // Catat waktu finish diterima
+    console.log(`[sterilisasi/finish] lastFinishData diperbarui (action=${action}):`, lastFinishData);
+    
+    // Update lastData juga agar frontend bisa detect action finish/stop
     lastData = {
-      action:  "finish",
-      suhu:    data.suhu    ?? null,
-      tekanan: data.tekanan ?? null,
-      waktu:   data.waktu   ?? null,
-      timer:   null,
-      device,
-      sesi:    null,
-      status:  null,
+      action:    action,
+      suhu:      data.suhu    ?? null,
+      tekanan:   data.tekanan ?? null,
+      waktu:     data.waktu   ?? null,
+      timer:     null,
+      device:    data.Device  ?? data.device ?? null,
+      sesi:      null,
+      status:    null,
+      percobaan: null,
     };
-    console.log("lastData diperbarui dengan action finish:", lastData);
-
+    console.log(`[sterilisasi/finish] lastData diperbarui dengan action ${action}:`, lastData);
+    
     try {
       await new Finish(lastFinishData).save();
-      console.log("[sterilisasi/finish] Disimpan ke collection Finish");
+      console.log(`[sterilisasi/finish] Disimpan ke collection Finish (action=${action})`);
     } catch (error) {
       console.error("[sterilisasi/finish] Gagal simpan:", error.message);
     }
+    return;
+  }
+
+  // ── Topik sterilisasi/manual ──────────────────────────────
+  if (receivedTopic === MANUAL_TOPIC) {
+    // ANTI-LOOP: Abaikan message yang dikirim oleh backend sendiri
+    if (data.source === "backend") {
+      console.log("[sterilisasi/manual] Message dari backend sendiri, diabaikan (anti-loop)");
+      return;
+    }
+
+    lastManualData = {
+      valve:       data.valve       ?? null,
+      gas:         data.gas         ?? null,
+      starter:     data.starter     ?? null,
+      suhureal:    data.suhureal    ?? null,
+      tekananreal: data.tekananreal ?? null,
+      device:      data.device      ?? data.Device ?? null,
+      source:      data.source      ?? "device", // Track source
+    };
+    console.log("[sterilisasi/manual] lastManualData diperbarui (source: device, TIDAK disimpan ke DB):", lastManualData);
+    
+    // TIDAK DISIMPAN KE DATABASE - hanya di memory untuk real-time access
+    // try {
+    //   await new Manual(lastManualData).save();
+    //   console.log("[sterilisasi/manual] Disimpan ke collection Manual");
+    // } catch (error) {
+    //   console.error("[sterilisasi/manual] Gagal simpan:", error.message);
+    // }
     return;
   }
 
@@ -159,7 +165,7 @@ client.on("message", async (receivedTopic, message) => {
     return;
   }
 
-  const validActions = ["countdown", "running", "ignition", "stop"];
+  const validActions = ["countdown", "running", "ignition", "ignition_failed", "stop"];
   if (!validActions.includes(action)) {
     console.warn("Action tidak dikenali:", action);
     return;
@@ -173,13 +179,14 @@ client.on("message", async (receivedTopic, message) => {
 
   lastData = {
     action,
-    suhu:    data.suhu    ?? null,
-    tekanan: data.tekanan ?? null,
-    waktu:   data.waktu   ?? null, // Tidak menggunakan fallback, biarkan null jika tidak ada
-    timer:   data.timer   ?? null, // Timer dari alat (format: "00:00:00")
-    device:  data.Device  ?? data.device ?? null,
-    sesi:    data.sesi    ?? null,
-    status:  data.status  ?? null,
+    suhu:      data.suhu      ?? null,
+    tekanan:   data.tekanan   ?? null,
+    waktu:     data.waktu     ?? null, // Tidak menggunakan fallback, biarkan null jika tidak ada
+    timer:     data.timer     ?? null, // Timer dari alat (format: "00:00:00")
+    device:    data.Device    ?? data.device ?? null,
+    sesi:      data.sesi      ?? null,
+    status:    data.status    ?? null,
+    percobaan: data.percobaan ?? null, // Jumlah percobaan ignition (untuk ignition_failed)
   };
   console.log("lastData diperbarui:", lastData);
 
@@ -198,17 +205,20 @@ module.exports = {
   getLastFinishData: () => lastFinishData,
   consumeFinish:     () => { lastFinishData = null; finishConsumed = true; },
   isFinishConsumed:  () => finishConsumed,
+  getLastManualData: () => lastManualData,
   PUBLISH_TOPIC,
+  MANUAL_TOPIC,
   updateLastDataWithStop: (device) => {
     lastData = {
-      action:  "stop",
-      suhu:    null,
-      tekanan: null,
-      waktu:   null,
-      timer:   null,
-      device:  device ?? null,
-      sesi:    null,
-      status:  null,
+      action:    "stop",
+      suhu:      null,
+      tekanan:   null,
+      waktu:     null,
+      timer:     null,
+      device:    device ?? null,
+      sesi:      null,
+      status:    null,
+      percobaan: null,
     };
     console.log("[MQTT] lastData diperbarui dengan action stop (dari frontend):", lastData);
   },
@@ -220,19 +230,33 @@ module.exports = {
       });
     });
   },
-  publishRunning: (payload) => {
+  publishStop: (payload) => {
     return new Promise((resolve, reject) => {
-      client.publish(SUBSCRIBE_TOPIC, JSON.stringify(payload), (err) => {
+      client.publish(FINISH_TOPIC, JSON.stringify(payload), (err) => {
         if (err) reject(err);
-        else { console.log(`[PUBLISH] ${SUBSCRIBE_TOPIC}:`, JSON.stringify(payload)); resolve(); }
+        else { console.log(`[PUBLISH] ${FINISH_TOPIC}:`, JSON.stringify(payload)); resolve(); }
       });
     });
   },
   publishManual: (payload) => {
     return new Promise((resolve, reject) => {
-      client.publish(MANUAL_TOPIC, JSON.stringify(payload), (err) => {
+      // Tambahkan field source: "backend" untuk anti-loop
+      const payloadWithSource = {
+        ...payload,
+        source: "backend"
+      };
+      
+      client.publish(MANUAL_TOPIC, JSON.stringify(payloadWithSource), (err) => {
         if (err) reject(err);
-        else { console.log(`[PUBLISH] ${MANUAL_TOPIC}:`, JSON.stringify(payload)); resolve(); }
+        else { console.log(`[PUBLISH] ${MANUAL_TOPIC}:`, JSON.stringify(payloadWithSource)); resolve(); }
+      });
+    });
+  },
+  publishRunning: (payload) => {
+    return new Promise((resolve, reject) => {
+      client.publish(SUBSCRIBE_TOPIC, JSON.stringify(payload), (err) => {
+        if (err) reject(err);
+        else { console.log(`[PUBLISH] ${SUBSCRIBE_TOPIC}:`, JSON.stringify(payload)); resolve(); }
       });
     });
   },

@@ -158,6 +158,63 @@ const manualStyles = StyleSheet.create({
     opacity: 0.55,
   },
 
+  // ── Chart card ────────────────────────────────────────
+  chartCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 16,
+    gap: 20,
+  },
+  chartHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+  },
+  chartTitle: {
+    color: COLORS.muted,
+    fontSize: 10,
+    fontWeight: '700' as const,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase' as const,
+  },
+  chartSection: {
+    gap: 10,
+  },
+  chartLabel: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: '700' as const,
+    letterSpacing: 0.3,
+  },
+  chartLegend: {
+    flexDirection: 'row' as const,
+    justifyContent: 'center' as const,
+    gap: 20,
+    marginBottom: 10,
+  },
+  legendItem: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+  },
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  legendText: {
+    color: COLORS.muted,
+    fontSize: 11,
+    fontWeight: '600' as const,
+    letterSpacing: 0.3,
+  },
+  chart: {
+    borderRadius: 12,
+    paddingRight: 0,
+  },
+
   // ── Status card ───────────────────────────────────────
   statusCard: {
     backgroundColor: COLORS.surface,
