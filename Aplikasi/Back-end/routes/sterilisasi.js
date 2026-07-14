@@ -1,29 +1,30 @@
 const express    = require("express");
 const router     = express.Router();
-const { Set, Running, Finish, Manual } = require("../models/sterilisasi");
+const { Set, Running, Finish, Manual, History } = require("../models/sterilisasi");
 const mqttClient = require("../mqtt/mqttClient");
 
 // ── POST /sterilisasi/set ─────────────────────────────────────
 // Frontend kirim parameter start → publish ke MQTT sterilisasi/set
 router.post("/set", async (req, res) => {
   try {
-    const { action, suhu, tekanan, waktu, device } = req.body;
+    const { action, suhu, tekanan, waktu, device, batch_id } = req.body;
 
     if (!device) {
       return res.status(400).json({ status: "error", message: "Field device wajib diisi" });
     }
 
     const mqttPayload = {
-      action:  action || "start",
-      suhu:    suhu    != null ? Number(suhu)    : null,
-      tekanan: tekanan != null ? Number(tekanan) : null,
+      action:   action || "start",
+      suhu:     suhu    != null ? Number(suhu)    : null,
+      tekanan:  tekanan != null ? Number(tekanan) : null,
       waktu,
-      Device:  device,
+      Device:   device,
+      batch_id: batch_id ?? null, // Include batch_id jika ada
     };
 
     await mqttClient.publishSet(mqttPayload);
 
-    res.json({ status: "success", message: `Perintah ${action || "start"} berhasil dikirim` });
+    res.json({ status: "success", message: `Perintah ${action || "start"} berhasil dikirim`, batch_id: batch_id });
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
   }
@@ -63,7 +64,7 @@ router.get("/running", async (_req, res) => {
 // Frontend kirim perintah stop → publish ke topik sterilisasi/running
 router.post("/running", async (req, res) => {
   try {
-    const { action, device, suhu, tekanan } = req.body;
+    const { action, device, suhu, tekanan, batch_id } = req.body;
 
     if (!device) {
       return res.status(400).json({ status: "error", message: "Field device wajib diisi" });
@@ -72,32 +73,35 @@ router.post("/running", async (req, res) => {
     // Jika action adalah stop, kirim ke topic sterilisasi/finish
     if (action === "stop" || !action) {
       const mqttPayload = {
-        action: "stop",
-        suhu:   suhu    != null ? Number(suhu)    : 0,
-        tekanan: tekanan != null ? Number(tekanan) : 0,
-        device: device,
+        action:   "stop",
+        suhu:     suhu     != null ? Number(suhu)     : 0,
+        tekanan:  tekanan  != null ? Number(tekanan)  : 0,
+        device:   device,
+        batch_id: batch_id ?? null, // Include batch_id jika ada
       };
 
       await mqttClient.publishStop(mqttPayload);
 
       // Update lastData langsung agar frontend bisa detect stop
-      mqttClient.updateLastDataWithStop(device);
+      mqttClient.updateLastDataWithStop(device, batch_id);
 
       return res.json({ 
         status: "success", 
-        message: `Perintah stop berhasil dikirim ke topik sterilisasi/finish` 
+        message: `Perintah stop berhasil dikirim ke topik sterilisasi/finish`,
+        batch_id: batch_id 
       });
     }
 
     // Untuk action lain, kirim ke topic sterilisasi/running
     const mqttPayload = {
-      action: action,
-      Device: device,
+      action:   action,
+      Device:   device,
+      batch_id: batch_id ?? null, // Include batch_id jika ada
     };
 
     await mqttClient.publishRunning(mqttPayload);
 
-    res.json({ status: "success", message: `Perintah ${action} berhasil dikirim ke topik running` });
+    res.json({ status: "success", message: `Perintah ${action} berhasil dikirim ke topik running`, batch_id: batch_id });
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
   }
@@ -113,6 +117,29 @@ router.get("/running/last", async (_req, res) => {
   }
 });
 
+// ── GET /sterilisasi/running/batch/:batch_id ──────────────────
+// Ambil semua data running berdasarkan batch_id untuk grafik riwayat
+router.get("/running/batch/:batch_id", async (req, res) => {
+  try {
+    const { batch_id } = req.params;
+
+    if (!batch_id) {
+      return res.status(400).json({ status: "error", message: "batch_id tidak valid" });
+    }
+
+    // Ambil semua data running dengan batch_id yang sama, diurutkan berdasarkan waktu
+    const runningData = await Running.find({ batch_id }).sort({ createdAt: 1 });
+
+    res.json({ 
+      status: "success", 
+      data: runningData,
+      count: runningData.length 
+    });
+  } catch (error) {
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
 // ── GET /sterilisasi/finish ───────────────────────────────────
 router.get("/finish", async (_req, res) => {
   try {
@@ -123,22 +150,116 @@ router.get("/finish", async (_req, res) => {
   }
 });
 
+// ── GET /sterilisasi/histories ────────────────────────────────
+// Ambil semua data dari collection histories (yang punya batch_id)
+router.get("/histories", async (_req, res) => {
+  try {
+    const histories = await History.find()
+      .sort({ createdAt: -1 })
+      .limit(100);
+    
+    // Transform data untuk frontend
+    const data = histories.map(h => ({
+      _id: h._id,
+      batch_id: h.batch_id,
+      device: h.device,
+      namaAlat: h.namaAlat,
+      suhu: h.set?.suhu ?? 0,
+      tekanan: h.set?.tekanan ?? 0,
+      waktu: h.set?.waktu ?? "00:00",
+      status: h.status,
+      action: h.finish?.action ?? null,
+      createdAt: h.createdAt,
+      notes: h.notes ?? "",
+      runningDataCount: h.runningData?.length ?? 0,
+    }));
+    
+    res.json({ status: "success", data });
+  } catch (error) {
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+// ── GET /sterilisasi/histories/:batch_id ──────────────────────
+// Ambil satu history lengkap dengan runningData untuk grafik
+router.get("/histories/:batch_id", async (req, res) => {
+  try {
+    const { batch_id } = req.params;
+    
+    const history = await History.findOne({ batch_id });
+    
+    if (!history) {
+      return res.status(404).json({ 
+        status: "error", 
+        message: "History not found" 
+      });
+    }
+    
+    res.json({ status: "success", data: history });
+  } catch (error) {
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
 // ── GET /sterilisasi/history ──────────────────────────────────
+// DEPRECATED: Masih ada untuk backward compatibility
 // Menggabungkan data finish dengan set untuk history lengkap
 router.get("/history", async (_req, res) => {
   try {
     const finishData = await Finish.find().sort({ createdAt: -1 }).limit(100);
     
-    // Untuk setiap finish, cari set yang sesuai (device sama, waktu berdekatan)
+    // Untuk setiap finish, cari set yang sesuai berdasarkan batch_id atau device+waktu
     const history = await Promise.all(
       finishData.map(async (finish) => {
-        // Cari set dengan device yang sama dan waktu dalam rentang 2 jam sebelum finish
-        const timeWindow = new Date(finish.createdAt.getTime() - 2 * 60 * 60 * 1000);
-        const matchingSet = await Set.findOne({
-          device: finish.device,
-          action: "start",
-          createdAt: { $gte: timeWindow, $lte: finish.createdAt }
-        }).sort({ createdAt: -1 });
+        let matchingSet = null;
+        let batchIdToUse = finish.batch_id; // Default: gunakan batch_id dari finish
+        
+        // Prioritas 1: Cari berdasarkan batch_id jika ada
+        if (finish.batch_id) {
+          matchingSet = await Set.findOne({
+            batch_id: finish.batch_id,
+            action: "start"
+          }).sort({ createdAt: -1 });
+          
+          if (matchingSet) {
+            console.log(`[History] Match berdasarkan batch_id: ${finish.batch_id}`);
+          }
+        }
+        
+        // Prioritas 2: Fallback ke metode lama (device + waktu) jika tidak ada batch_id atau tidak ketemu
+        if (!matchingSet) {
+          const timeWindow = new Date(finish.createdAt.getTime() - 2 * 60 * 60 * 1000);
+          matchingSet = await Set.findOne({
+            device: finish.device,
+            action: "start",
+            createdAt: { $gte: timeWindow, $lte: finish.createdAt }
+          }).sort({ createdAt: -1 });
+          
+          if (matchingSet) {
+            console.log(`[History] Match berdasarkan device+waktu untuk device: ${finish.device}`);
+            
+            // FALLBACK: Jika finish tidak punya batch_id tapi set punya, gunakan dari set
+            if (!batchIdToUse && matchingSet.batch_id) {
+              batchIdToUse = matchingSet.batch_id;
+              console.log(`[History] Menggunakan batch_id dari Set: ${batchIdToUse}`);
+            }
+          }
+        }
+        
+        // FALLBACK FINAL: Jika masih tidak ada batch_id, coba cari dari running terakhir
+        if (!batchIdToUse) {
+          const timeWindow = new Date(finish.createdAt.getTime() - 2 * 60 * 60 * 1000);
+          const lastRunning = await Running.findOne({
+            device: finish.device,
+            batch_id: { $ne: null }, // Hanya yang ada batch_id
+            createdAt: { $gte: timeWindow, $lte: finish.createdAt }
+          }).sort({ createdAt: -1 });
+          
+          if (lastRunning && lastRunning.batch_id) {
+            batchIdToUse = lastRunning.batch_id;
+            console.log(`[History] Menggunakan batch_id dari Running: ${batchIdToUse}`);
+          }
+        }
 
         return {
           _id: finish._id,
@@ -151,6 +272,7 @@ router.get("/history", async (_req, res) => {
           finishTekanan: finish.tekanan,
           createdAt: finish.createdAt,
           notes: finish.notes || "",
+          batch_id: batchIdToUse, // Include batch_id (dari finish, set, atau running)
         };
       })
     );

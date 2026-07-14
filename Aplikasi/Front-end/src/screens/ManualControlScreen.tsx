@@ -398,7 +398,7 @@ export default function ManualControlScreen({ route, navigation }: Props) {
           </View>
 
           {/* Grafik Gabungan */}
-          <View style={styles.chartSection}>
+          <View style={[styles.chartSection, { marginLeft: -12 }]}>
             <LineChart
               data={{
                 labels: labels.length > 6 ? labels.filter((_, i) => i % Math.ceil(labels.length / 6) === 0) : labels,
@@ -414,14 +414,13 @@ export default function ManualControlScreen({ route, navigation }: Props) {
                     strokeWidth: 2,
                   },
                 ],
-                legend: ['Suhu (°C)', 'Tekanan (bar)'],
               }}
-              width={Dimensions.get('window').width - 64}
+              width={Dimensions.get('window').width - 80}
               height={220}
               chartConfig={{
-                backgroundColor: COLORS.cardBg,
-                backgroundGradientFrom: COLORS.cardBg,
-                backgroundGradientTo: COLORS.cardBg,
+                backgroundColor: COLORS.surface,
+                backgroundGradientFrom: COLORS.surface,
+                backgroundGradientTo: COLORS.surface,
                 decimalPlaces: 1,
                 color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
                 labelColor: () => COLORS.muted,
@@ -437,7 +436,9 @@ export default function ManualControlScreen({ route, navigation }: Props) {
                 },
               }}
               bezier
-              style={styles.chart}
+              style={{
+                borderRadius: 12,
+              }}
               withInnerLines={true}
               withOuterLines={true}
               withVerticalLines={false}

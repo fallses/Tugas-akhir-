@@ -10,11 +10,13 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LineChart } from 'react-native-chart-kit';
 import {
   COLORS,
   topBarStyles,
@@ -22,7 +24,7 @@ import {
   filterStyles,
   detailModalStyles,
 } from '../styles/HistoryScreen.styles';
-import { fetchHistory, HistoryData, deleteHistory, updateHistoryNotes } from '../services/backendService';
+import { fetchHistories, HistoriesData, deleteHistory, updateHistoryNotes, fetchHistoryDetail } from '../services/backendService';
 
 const STORAGE_KEY = '@daftar_alat';
 
@@ -47,6 +49,7 @@ export interface HistoryEntry {
   selesaiPukul: string;
   status:       'Berhasil' | 'Dihentikan';
   notes?:       string;
+  batch_id?:    string | null; // ID unik untuk membedakan proses
 }
 
 type FilterType = 'Semua' | 'Berhasil' | 'Dihentikan';
@@ -64,7 +67,7 @@ interface Props {
 // ─────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────
-function convertHistoryDataToEntry(data: HistoryData[], alatMap: Map<string, string>): HistoryEntry[] {
+function convertHistoriesDataToEntry(data: HistoriesData[], alatMap: Map<string, string>): HistoryEntry[] {
   return data.map((item, index) => {
     const createdAt = item.createdAt ? new Date(item.createdAt) : new Date();
     const tanggal = createdAt.toLocaleDateString('id-ID', {
@@ -77,7 +80,7 @@ function convertHistoryDataToEntry(data: HistoryData[], alatMap: Map<string, str
       minute: '2-digit',
     });
 
-    // Hitung mulai pukul dari waktu durasi (dari set)
+    // Hitung mulai pukul dari waktu durasi
     let mulaiPukul = selesaiPukul;
     if (item.waktu) {
       const parts = item.waktu.split(':');
@@ -91,66 +94,34 @@ function convertHistoryDataToEntry(data: HistoryData[], alatMap: Map<string, str
       }
     }
 
-    const idAlat   = item.device ?? '-';
-    const namaAlat = alatMap.get(idAlat) ?? idAlat;
+    const namaAlat = item.namaAlat || alatMap.get(item.device) || item.device;
 
-    // Mapping status dari backend ke label frontend
-    // Prioritas: cek field 'action' dulu, fallback ke 'status'
+    // Mapping status
     let status: 'Berhasil' | 'Dihentikan' = 'Berhasil';
     
-    // Debug log untuk melihat data dari backend
-    console.log(`[HistoryScreen] Item ${item._id}:`, JSON.stringify({
-      action: item.action,
-      status: item.status,
-    }));
-    
-    // Cek action terlebih dahulu
-    if (item.action && typeof item.action === 'string' && item.action.trim() !== '') {
-      const actionLower = item.action.toLowerCase().trim();
-      // Jika action adalah "stop" atau mengandung "stop", maka Dihentikan
-      if (actionLower === 'stop' || actionLower.includes('stop')) {
-        status = 'Dihentikan';
-      } 
-      // Jika action adalah "finish" atau "selesai", maka Berhasil
-      else if (actionLower === 'finish' || actionLower === 'selesai' || actionLower.includes('finish')) {
-        status = 'Berhasil';
-      }
-      // Selain itu, default Dihentikan (karena bukan finish)
-      else {
-        status = 'Dihentikan';
-      }
-      console.log(`[HistoryScreen] Menggunakan action: "${item.action}" → Status: ${status}`);
-    } 
-    // Fallback ke status
-    else if (item.status && typeof item.status === 'string' && item.status.trim() !== '') {
-      const statusLower = item.status.toLowerCase().trim();
-      // Jika status adalah "stop" atau mengandung "stop", maka Dihentikan
-      if (statusLower === 'stop' || statusLower.includes('stop')) {
-        status = 'Dihentikan';
-      }
-      // Jika status adalah "selesai" atau "finish", maka Berhasil
-      else if (statusLower === 'selesai' || statusLower === 'finish' || statusLower.includes('selesai')) {
-        status = 'Berhasil';
-      }
-      // Default Berhasil
-      else {
-        status = 'Berhasil';
-      }
-      console.log(`[HistoryScreen] Menggunakan status (fallback): "${item.status}" → Status: ${status}`);
+    if (item.status === 'stopped' || item.action === 'stop') {
+      status = 'Dihentikan';
+    } else if (item.status === 'completed' || item.action === 'finish') {
+      status = 'Berhasil';
+    } else if (item.status === 'running') {
+      status = 'Dihentikan'; // Proses yang belum selesai dianggap dihentikan
     }
 
+    console.log(`[HistoryScreen] Mapping entry ${item._id}: batch_id = ${item.batch_id}, status=${status}`);
+
     return {
-      id: item._id ?? `history-${index}`,
+      id: item._id,
       namaAlat,
-      idAlat,
-      suhu:    item.suhu    ?? 0,
+      idAlat: item.device,
+      suhu: item.suhu ?? 0,
       tekanan: item.tekanan ?? 0,
-      durasi:  item.waktu   ?? '00:00',
+      durasi: item.waktu ?? '00:00',
       tanggal,
       mulaiPukul,
       selesaiPukul,
       status,
       notes: item.notes ?? '',
+      batch_id: item.batch_id, // Selalu ada karena dari collection histories
     };
   });
 }
@@ -204,20 +175,24 @@ export default function HistoryScreen({ route, navigation }: Props) {
         console.error('[HistoryScreen] Error loading alat data:', err);
       }
 
-      // Fetch history dari backend
-      const res = await fetchHistory();
+      // Fetch histories dari backend (collection baru)
+      console.log('[HistoryScreen] 🔍 Fetching histories from API...');
+      const res = await fetchHistories();
       if (res.status === 'success' && res.data) {
-        const converted = convertHistoryDataToEntry(res.data, alatMap);
+        console.log(`[HistoryScreen] ✅ Received ${res.data.length} histories`);
+        const converted = convertHistoriesDataToEntry(res.data, alatMap);
         // Filter berdasarkan idAlat jika ada parameter
         const filtered = idAlatFilter 
           ? converted.filter(entry => entry.idAlat === idAlatFilter)
           : converted;
         setEntries(filtered);
+        console.log(`[HistoryScreen] ✅ Loaded ${filtered.length} entries`);
       } else {
+        console.log('[HistoryScreen] ⚠️ No data received');
         setEntries([]);
       }
     } catch (err) {
-      console.error('[HistoryScreen] Error loading history:', err);
+      console.error('[HistoryScreen] ❌ Error loading history:', err);
       setError('Gagal memuat riwayat');
       setEntries([]);
     } finally {
@@ -236,6 +211,14 @@ export default function HistoryScreen({ route, navigation }: Props) {
   const [selected, setSelected]         = useState<HistoryEntry | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
+  // Chart data (data real dari database berdasarkan batch_id)
+  const [chartData, setChartData] = useState<{
+    suhuData: number[];
+    tekananData: number[];
+    labels: string[];
+  } | null>(null);
+  const [loadingChart, setLoadingChart] = useState(false);
+
   // Notes editing
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesText, setNotesText]       = useState('');
@@ -253,12 +236,85 @@ export default function HistoryScreen({ route, navigation }: Props) {
     setEditingNotes(false);
     setShowDeleteConfirm(false);
     setModalVisible(true);
+    
+    // Load chart data berdasarkan batch_id
+    loadChartData(entry);
   }
 
   function closeModal() {
     setModalVisible(false);
     setShowDeleteConfirm(false);
+    setChartData(null); // Reset chart data
     setTimeout(() => setSelected(null), 300);
+  }
+
+  // Load chart data dari database berdasarkan batch_id
+  async function loadChartData(entry: HistoryEntry) {
+    // Cek apakah ada batch_id
+    const batchId = entry.batch_id;
+    
+    console.log('[HistoryScreen] loadChartData called for entry:', {
+      id: entry.id,
+      namaAlat: entry.namaAlat,
+      batch_id: batchId,
+      hasBatchId: !!batchId
+    });
+    
+    if (!batchId) {
+      console.log('[HistoryScreen] ❌ Tidak ada batch_id, grafik tidak tersedia');
+      setChartData(null);
+      return;
+    }
+
+    setLoadingChart(true);
+    try {
+      console.log(`[HistoryScreen] 🔍 Mengambil detail history untuk batch_id: ${batchId}`);
+      const response = await fetchHistoryDetail(batchId);
+      
+      console.log(`[HistoryScreen] 📦 Response status: ${response.status}`);
+      
+      if (response.status === 'success' && response.data && response.data.runningData && response.data.runningData.length > 0) {
+        const runningData = response.data.runningData;
+        console.log(`[HistoryScreen] ✅ Data running ditemukan: ${runningData.length} data points`);
+        console.log('[HistoryScreen] 📊 Sample data:', runningData.slice(0, 3)); // Log 3 data pertama
+        
+        // Extract data untuk grafik
+        const suhuData = runningData.map(item => item.suhu ?? 0);
+        const tekananData = runningData.map(item => item.tekanan ?? 0);
+        
+        console.log('[HistoryScreen] 🌡️ Suhu data:', suhuData.slice(0, 5)); // Log 5 data pertama
+        console.log('[HistoryScreen] 💨 Tekanan data:', tekananData.slice(0, 5)); // Log 5 data pertama
+        
+        // Generate labels dari timer atau timestamp
+        const labels = runningData.map((item, index) => {
+          if (item.timer) {
+            // Ambil menit:detik dari timer (format: HH:MM:SS)
+            const parts = item.timer.split(':');
+            if (parts.length === 3) {
+              return `${parts[1]}:${parts[2]}`; // MM:SS
+            }
+            return item.timer;
+          }
+          // Fallback: gunakan index
+          return index === 0 ? 'Mulai' : (index === runningData.length - 1 ? 'Selesai' : '');
+        });
+        
+        setChartData({ suhuData, tekananData, labels });
+        console.log('[HistoryScreen] ✅ Chart data berhasil diload:', { 
+          suhuPoints: suhuData.length, 
+          tekananPoints: tekananData.length,
+          labelCount: labels.length
+        });
+      } else {
+        console.log('[HistoryScreen] ⚠️ Tidak ada data running, grafik tidak tersedia');
+        setChartData(null);
+      }
+    } catch (error) {
+      console.error('[HistoryScreen] ❌ Error loading chart data:', error);
+      setChartData(null);
+    } finally {
+      setLoadingChart(false);
+    }
   }
 
   async function saveNotes() {
@@ -550,6 +606,186 @@ export default function HistoryScreen({ route, navigation }: Props) {
                 <Text style={detailModalStyles.statusSubtitle}>
                   {selected.namaAlat} · {selected.idAlat}
                 </Text>
+              </View>
+
+              {/* ── Grafik Perubahan Suhu dan Tekanan */}
+              <View style={{
+                backgroundColor: COLORS.surface,
+                borderRadius: 16,
+                padding: 16,
+                marginBottom: 16,
+                borderWidth: 1,
+                borderColor: COLORS.border,
+              }}>
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  marginBottom: 12,
+                  gap: 6,
+                }}>
+                  <MaterialCommunityIcons name="chart-areaspline" size={16} color={COLORS.muted} />
+                  <Text style={{
+                    color: COLORS.white,
+                    fontSize: 14,
+                    fontWeight: '600',
+                  }}>
+                    Grafik Perubahan
+                  </Text>
+                  {loadingChart && (
+                    <ActivityIndicator size="small" color={COLORS.accent} style={{ marginLeft: 8 }} />
+                  )}
+                </View>
+
+                {/* Loading state */}
+                {loadingChart && (
+                  <View style={{
+                    height: 200,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}>
+                    <ActivityIndicator size="large" color={COLORS.accent} />
+                    <Text style={{
+                      color: COLORS.muted,
+                      fontSize: 12,
+                      marginTop: 12,
+                    }}>
+                      Memuat data grafik...
+                    </Text>
+                  </View>
+                )}
+
+                {/* Data real dari database */}
+                {!loadingChart && chartData && (
+                  <>
+                    {/* Legend */}
+                    <View style={{
+                      flexDirection: 'row',
+                      justifyContent: 'center',
+                      marginBottom: 12,
+                      gap: 16,
+                    }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={{
+                          width: 12,
+                          height: 12,
+                          borderRadius: 6,
+                          backgroundColor: COLORS.fire,
+                        }} />
+                        <Text style={{ color: COLORS.muted, fontSize: 12 }}>Suhu (°C)</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={{
+                          width: 12,
+                          height: 12,
+                          borderRadius: 6,
+                          backgroundColor: COLORS.accent,
+                        }} />
+                        <Text style={{ color: COLORS.muted, fontSize: 12 }}>Tekanan (bar)</Text>
+                      </View>
+                    </View>
+
+                    {/* Grafik dengan data real */}
+                    <LineChart
+                      data={{
+                        labels: chartData.labels.length > 6 
+                          ? chartData.labels.filter((_, i) => i % Math.ceil(chartData.labels.length / 6) === 0) 
+                          : chartData.labels,
+                        datasets: [
+                          {
+                            data: chartData.suhuData.length > 0 ? chartData.suhuData : [0],
+                            color: () => COLORS.fire,
+                            strokeWidth: 2,
+                          },
+                          {
+                            data: chartData.tekananData.length > 0 ? chartData.tekananData : [0],
+                            color: () => COLORS.accent,
+                            strokeWidth: 2,
+                          },
+                        ],
+                      }}
+                      width={Dimensions.get('window').width - 84}
+                      height={200}
+                      chartConfig={{
+                        backgroundColor: COLORS.surface,
+                        backgroundGradientFrom: COLORS.surface,
+                        backgroundGradientTo: COLORS.surface,
+                        decimalPlaces: 1,
+                        color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+                        labelColor: () => COLORS.muted,
+                        style: { borderRadius: 12 },
+                        propsForDots: {
+                          r: '4',
+                          strokeWidth: '2',
+                        },
+                        propsForBackgroundLines: {
+                          strokeDasharray: '',
+                          stroke: COLORS.border,
+                          strokeWidth: 1,
+                        },
+                      }}
+                      bezier
+                      style={{
+                        borderRadius: 12,
+                      }}
+                      withInnerLines={true}
+                      withOuterLines={true}
+                      withVerticalLines={false}
+                      withHorizontalLines={true}
+                      withVerticalLabels={true}
+                      withHorizontalLabels={true}
+                      withDots={true}
+                      withShadow={false}
+                    />
+
+                    <Text style={{
+                      color: COLORS.green,
+                      fontSize: 11,
+                      textAlign: 'center',
+                      marginTop: 8,
+                      fontWeight: '600',
+                    }}>
+                      ✓ Grafik real dari database ({chartData.suhuData.length} data points)
+                    </Text>
+                  </>
+                )}
+
+                {/* Tidak ada data atau batch_id */}
+                {!loadingChart && !chartData && (
+                  <View style={{
+                    height: 200,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    backgroundColor: COLORS.surface2,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: COLORS.border,
+                    borderStyle: 'dashed',
+                  }}>
+                    <MaterialCommunityIcons 
+                      name="chart-line-variant" 
+                      size={48} 
+                      color={COLORS.muted2} 
+                    />
+                    <Text style={{
+                      color: COLORS.muted,
+                      fontSize: 13,
+                      marginTop: 12,
+                      textAlign: 'center',
+                      paddingHorizontal: 24,
+                    }}>
+                      Grafik tidak tersedia
+                    </Text>
+                    <Text style={{
+                      color: COLORS.muted2,
+                      fontSize: 11,
+                      marginTop: 4,
+                      textAlign: 'center',
+                      paddingHorizontal: 24,
+                    }}>
+                      Tidak ada data running untuk proses ini
+                    </Text>
+                  </View>
+                )}
               </View>
 
               {/* ── Detail info card */}

@@ -1,4 +1,4 @@
-export const BASE_URL = 'http://10.0.2.2:5000';
+export const BASE_URL = 'https://backend-sigasti-production-6cf6.up.railway.app';
 
 export async function apiPostSterilisasiSet(payload: {
   suhu: number;

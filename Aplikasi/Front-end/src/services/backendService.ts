@@ -1,7 +1,10 @@
 import Config from 'react-native-config';
 
 // Ambil BACKEND_URL langsung dari .env file
-const BACKEND_URL = Config.BACKEND_URL || 'https://backend-baglog-care.up.railway.app';
+const BACKEND_URL = Config.BACKEND_URL || 'https://backend-sigasti-production-6cf6.up.railway.app';
+
+console.log('[BackendService] 🔍 BACKEND_URL =', BACKEND_URL);
+console.log('[BackendService] 🔍 Config.BACKEND_URL =', Config.BACKEND_URL);
 
 // ── Tipe data dari sterilisasi/running ───────────────────────
 export interface RunningData {
@@ -86,11 +89,86 @@ export interface HistoryData {
   status:        string;        // "selesai" | "stop" - fallback
   notes?:        string;
   createdAt:     string;
+  batch_id?:     string | null; // ID unik untuk membedakan proses
 }
 
 export interface HistoryResponse {
   status: string;
   data:   HistoryData[];
+}
+
+// ── Tipe data untuk histories (collection baru) ───────────────
+export interface HistoriesData {
+  _id:              string;
+  batch_id:         string;
+  device:           string;
+  namaAlat:         string;
+  suhu:             number;
+  tekanan:          number;
+  waktu:            string;
+  status:           'running' | 'completed' | 'stopped';
+  action:           string | null;
+  createdAt:        string;
+  notes:            string;
+  runningDataCount: number;
+}
+
+export interface HistoriesResponse {
+  status: string;
+  data:   HistoriesData[];
+}
+
+// ── Tipe data untuk history detail dengan grafik ──────────────
+export interface HistoryDetailData {
+  _id:       string;
+  batch_id:  string;
+  device:    string;
+  namaAlat:  string;
+  set: {
+    suhu:       number;
+    tekanan:    number;
+    waktu:      string;
+    startedAt:  string;
+  };
+  runningData: Array<{
+    suhu:      number;
+    tekanan:   number;
+    timer:     string;
+    timestamp: string;
+  }>;
+  finish?: {
+    action:     string;
+    suhu:       number;
+    tekanan:    number;
+    finishedAt: string;
+  };
+  status:    string;
+  notes:     string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HistoryDetailResponse {
+  status: string;
+  data:   HistoryDetailData;
+}
+
+// ── Tipe data untuk running batch (untuk grafik riwayat) ─────
+export interface RunningBatchData {
+  _id:       string;
+  action:    string;
+  suhu:      number | null;
+  tekanan:   number | null;
+  timer:     string | null;
+  device:    string;
+  batch_id:  string;
+  createdAt: string;
+}
+
+export interface RunningBatchResponse {
+  status: string;
+  data:   RunningBatchData[];
+  count:  number;
 }
 
 /**
@@ -162,9 +240,51 @@ export async function fetchFinishHistory(): Promise<FinishListResponse> {
 /**
  * Ambil data history lengkap (gabungan finish + set).
  * Endpoint: GET /sterilisasi/history
+ * DEPRECATED: Gunakan fetchHistories() untuk data yang lebih lengkap
  */
 export async function fetchHistory(): Promise<HistoryResponse> {
   const res = await fetch(`${BACKEND_URL}/sterilisasi/history`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Ambil data histories (collection baru dengan batch_id).
+ * Endpoint: GET /sterilisasi/histories
+ * RECOMMENDED: Gunakan ini untuk data yang lebih lengkap dan grafik
+ */
+export async function fetchHistories(): Promise<HistoriesResponse> {
+  const res = await fetch(`${BACKEND_URL}/sterilisasi/histories`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Ambil detail history berdasarkan batch_id (termasuk runningData untuk grafik).
+ * Endpoint: GET /sterilisasi/histories/:batch_id
+ */
+export async function fetchHistoryDetail(batchId: string): Promise<HistoryDetailResponse> {
+  const res = await fetch(`${BACKEND_URL}/sterilisasi/histories/${batchId}`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Ambil data running berdasarkan batch_id untuk grafik riwayat.
+ * Endpoint: GET /sterilisasi/running/batch/:batch_id
+ * DEPRECATED: Gunakan fetchHistoryDetail() yang lebih lengkap
+ */
+export async function fetchRunningByBatchId(batchId: string): Promise<RunningBatchResponse> {
+  const res = await fetch(`${BACKEND_URL}/sterilisasi/running/batch/${batchId}`, {
     method: 'GET',
     headers: { 'Content-Type': 'application/json' },
   });
